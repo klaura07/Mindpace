@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS questions (
     topic                TEXT NOT NULL,
     prompt_text          TEXT NOT NULL,
     reference_answer     TEXT,
+    question_type        TEXT NOT NULL DEFAULT 'mcq' CHECK (question_type IN ('mcq', 'descriptive')),
+    options              TEXT,   -- JSON array of answer choices, as TEXT (e.g. '["A","B","C"]')
+    correct_answer       TEXT,
     difficulty           INTEGER DEFAULT 1,
     parent_question_id   INTEGER,
     created_at            TEXT NOT NULL DEFAULT (datetime('now')),

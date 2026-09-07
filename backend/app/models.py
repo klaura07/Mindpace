@@ -17,3 +17,27 @@ class UserOut(BaseModel):
     user_id: int
     email: str
     created_at: str
+
+
+class QuestionCreate(BaseModel):
+    topic: str
+    prompt_text: str
+    reference_answer: str | None = None
+    question_type: str = "mcq"
+    options: list[str] | None = None
+    correct_answer: str | None = None
+    difficulty: int = 1
+    parent_question_id: int | None = None
+
+
+class QuestionOut(BaseModel):
+    question_id: int
+    topic: str
+    prompt_text: str
+    reference_answer: str | None
+    question_type: str
+    options: list[str] | None
+    correct_answer: str | None
+    difficulty: int
+    parent_question_id: int | None
+    created_at: str
