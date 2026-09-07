@@ -14,7 +14,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from app.database import get_connection, init_db
-from app.models import QuestionCreate, QuestionOut, UserCreate, UserOut
+from app.models import (
+    QuestionCreate,
+    QuestionOut,
+    ResponseCreate,
+    ResponseOut,
+    SessionCreate,
+    SessionOut,
+    UserCreate,
+    UserOut,
+)
 
 
 @asynccontextmanager
@@ -130,3 +139,88 @@ def list_questions(topic: str | None = None):
         rows = conn.execute("SELECT * FROM questions ORDER BY question_id").fetchall()
     conn.close()
     return [_row_to_question(row) for row in rows]
+
+
+@app.post("/responses", response_model=ResponseOut, status_code=201)
+def create_response(response: ResponseCreate):
+    conn = get_connection()
+    try:
+        question = conn.execute(
+            "SELECT correct_answer FROM questions WHERE question_id = ?",
+            (response.question_id,),
+        ).fetchone()
+        if question is None:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        is_correct = int(
+            question["correct_answer"] is not None
+            and response.answer_text is not None
+            and response.answer_text.strip().lower()
+            == question["correct_answer"].strip().lower()
+        )
+
+        cursor = conn.execute(
+            """INSERT INTO responses
+               (session_id, question_id, answer_text, is_correct,
+                confidence, response_time_ms)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                response.session_id,
+                response.question_id,
+                response.answer_text,
+                is_correct,
+                response.confidence,
+                response.response_time_ms,
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM responses WHERE response_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/responses/{response_id}", response_model=ResponseOut)
+def get_response(response_id: int):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM responses WHERE response_id = ?", (response_id,)
+    ).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Response not found")
+    return dict(row)
+
+
+@app.post("/sessions", response_model=SessionOut, status_code=201)
+def create_session(session: SessionCreate):
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO sessions (user_id) VALUES (?)", (session.user_id,)
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/sessions/{session_id}", response_model=SessionOut)
+def get_session(session_id: int):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return dict(row)

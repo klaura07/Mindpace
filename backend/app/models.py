@@ -41,3 +41,33 @@ class QuestionOut(BaseModel):
     difficulty: int
     parent_question_id: int | None
     created_at: str
+
+
+class SessionCreate(BaseModel):
+    user_id: int
+
+
+class SessionOut(BaseModel):
+    session_id: int
+    user_id: int
+    start_time: str
+    end_time: str | None
+
+
+class ResponseCreate(BaseModel):
+    session_id: int
+    question_id: int
+    answer_text: str | None = None
+    confidence: float
+    response_time_ms: int | None = None
+
+
+class ResponseOut(BaseModel):
+    response_id: int
+    session_id: int
+    question_id: int
+    answer_text: str | None
+    is_correct: int
+    confidence: float
+    response_time_ms: int | None
+    answered_at: str
