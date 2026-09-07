@@ -224,3 +224,22 @@ def get_session(session_id: int):
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return dict(row)
+
+
+@app.post("/sessions/{session_id}/end", response_model=SessionOut)
+def end_session(session_id: int):
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "UPDATE sessions SET end_time = datetime('now') WHERE session_id = ?",
+            (session_id,),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
