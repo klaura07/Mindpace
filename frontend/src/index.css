@@ -109,3 +109,74 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+form label {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+form input[type="text"],
+form input[type="email"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: normal;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button + button {
+  margin-left: 8px;
+}
+
+section {
+  max-width: 420px;
+  margin: 24px auto;
+  text-align: left;
+}
+
+[role="alert"] {
+  color: #c0392b;
+}
