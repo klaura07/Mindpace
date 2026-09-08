@@ -22,3 +22,28 @@ export function createUser(email) {
 export function getUserByEmail(email) {
   return request(`/users?email=${encodeURIComponent(email)}`);
 }
+
+export function createSession(userId) {
+  return request("/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export function getQuestions(topic) {
+  return request(`/questions?topic=${encodeURIComponent(topic)}`);
+}
+
+export function createResponse({ sessionId, questionId, answerText, confidence }) {
+  return request("/responses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      question_id: questionId,
+      answer_text: answerText,
+      confidence,
+    }),
+  });
+}
