@@ -78,3 +78,8 @@ class CalibrationScoreOut(BaseModel):
     user_id: int
     calibration_gap: float
     computed_at: str
+
+
+class QuestionGenerateRequest(BaseModel):
+    topic: str
+    count: int = 5
