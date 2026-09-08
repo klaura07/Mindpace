@@ -47,3 +47,19 @@ export function createResponse({ sessionId, questionId, answerText, confidence }
     }),
   });
 }
+
+export function computeCalibration(userId) {
+  return request(`/calibration/${userId}/compute`, { method: "POST" });
+}
+
+export function getCalibration(userId) {
+  return request(`/calibration/${userId}`);
+}
+
+export function generateQuestions(topic, count = 5) {
+  return request("/questions/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, count }),
+  });
+}
