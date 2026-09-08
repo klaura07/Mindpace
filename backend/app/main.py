@@ -14,9 +14,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from app.database import get_connection, init_db
+from app.gemini import generate_mcqs
 from app.models import (
     CalibrationScoreOut,
     QuestionCreate,
+    QuestionGenerateRequest,
     QuestionOut,
     ResponseCreate,
     ResponseOut,
@@ -113,6 +115,42 @@ def create_question(question: QuestionCreate):
         return _row_to_question(row)
     except sqlite3.IntegrityError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.post("/questions/generate", response_model=list[QuestionOut], status_code=201)
+def generate_questions(request: QuestionGenerateRequest):
+    try:
+        generated = generate_mcqs(request.topic, request.count)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    conn = get_connection()
+    try:
+        created = []
+        for q in generated:
+            cursor = conn.execute(
+                """INSERT INTO questions
+                   (topic, prompt_text, question_type, options, correct_answer, difficulty)
+                   VALUES (?, ?, 'mcq', ?, ?, ?)""",
+                (
+                    request.topic,
+                    q["prompt_text"],
+                    json.dumps(q["options"]),
+                    q["correct_answer"],
+                    q["difficulty"],
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM questions WHERE question_id = ?", (cursor.lastrowid,)
+            ).fetchone()
+            created.append(_row_to_question(row))
+        conn.commit()
+        return created
+    except (sqlite3.IntegrityError, KeyError) as e:
+        conn.rollback()
+        raise HTTPException(status_code=502, detail=f"Malformed question from Gemini: {e}")
     finally:
         conn.close()
 
