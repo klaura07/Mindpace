@@ -10,15 +10,17 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return;
     setError(null);
     setSubmitting(true);
     try {
       let user;
       try {
-        user = await createUser(email);
+        user = await createUser(trimmedEmail);
       } catch (err) {
         if (err.status === 409) {
-          user = await getUserByEmail(email);
+          user = await getUserByEmail(trimmedEmail);
         } else {
           throw err;
         }

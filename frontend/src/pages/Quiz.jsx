@@ -32,12 +32,12 @@ export default function Quiz() {
     setLoading(true);
     setError(null);
     try {
-      const session = await createSession(Number(userId));
       const fetched = await getQuestions(topic.trim());
       if (fetched.length === 0) {
-        setError(`No questions found for topic "${topic}".`);
+        setError(`No questions found for topic "${topic}". Try generating some from the dashboard first.`);
         return;
       }
+      const session = await createSession(Number(userId));
       setSessionId(session.session_id);
       setQuestions(fetched.slice(0, QUESTIONS_PER_QUIZ));
       setIndex(0);
@@ -129,21 +129,34 @@ export default function Quiz() {
         </div>
       ) : (
         <form onSubmit={submitAnswer}>
-          <fieldset>
-            {(question.options ?? []).map((option) => (
-              <label key={option}>
-                <input
-                  type="radio"
-                  name="answer"
-                  value={option}
-                  checked={selectedAnswer === option}
-                  onChange={(e) => setSelectedAnswer(e.target.value)}
-                  required
-                />
-                {option}
-              </label>
-            ))}
-          </fieldset>
+          {question.options && question.options.length > 0 ? (
+            <fieldset>
+              {question.options.map((option) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="answer"
+                    value={option}
+                    checked={selectedAnswer === option}
+                    onChange={(e) => setSelectedAnswer(e.target.value)}
+                    required
+                  />
+                  {option}
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <div>
+              <label htmlFor="free-answer">Your answer</label>
+              <input
+                id="free-answer"
+                type="text"
+                required
+                value={selectedAnswer}
+                onChange={(e) => setSelectedAnswer(e.target.value)}
+              />
+            </div>
+          )}
 
           <label htmlFor="confidence">Confidence: {confidence}</label>
           <input
