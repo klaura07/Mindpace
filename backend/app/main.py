@@ -12,6 +12,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
 from app.gemini import generate_mcqs
@@ -38,6 +39,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MindPace API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -67,6 +75,19 @@ def create_user(user: UserCreate):
         raise HTTPException(status_code=409, detail="Email already registered")
     finally:
         conn.close()
+
+
+@app.get("/users", response_model=UserOut)
+def get_user_by_email(email: str):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT user_id, email, created_at FROM users WHERE email = ?",
+        (email,),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return dict(row)
 
 
 @app.get("/users/{user_id}", response_model=UserOut)
