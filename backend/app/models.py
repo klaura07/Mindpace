@@ -71,3 +71,10 @@ class ResponseOut(BaseModel):
     confidence: float
     response_time_ms: int | None
     answered_at: str
+
+
+class CalibrationScoreOut(BaseModel):
+    score_id: int
+    user_id: int
+    calibration_gap: float
+    computed_at: str

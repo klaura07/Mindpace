@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.database import get_connection, init_db
 from app.models import (
+    CalibrationScoreOut,
     QuestionCreate,
     QuestionOut,
     ResponseCreate,
@@ -243,3 +244,55 @@ def end_session(session_id: int):
         return dict(row)
     finally:
         conn.close()
+
+
+@app.post("/calibration/{user_id}/compute", response_model=CalibrationScoreOut, status_code=201)
+def compute_calibration(user_id: int):
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        stats = conn.execute(
+            """SELECT AVG(r.confidence) AS avg_confidence, AVG(r.is_correct) AS accuracy
+               FROM responses r
+               JOIN sessions s ON s.session_id = r.session_id
+               WHERE s.user_id = ?""",
+            (user_id,),
+        ).fetchone()
+
+        if stats["avg_confidence"] is None:
+            raise HTTPException(
+                status_code=400, detail="User has no responses to calibrate"
+            )
+
+        calibration_gap = stats["avg_confidence"] - stats["accuracy"]
+
+        cursor = conn.execute(
+            "INSERT INTO calibration_scores (user_id, calibration_gap) VALUES (?, ?)",
+            (user_id, calibration_gap),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM calibration_scores WHERE score_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@app.get("/calibration/{user_id}", response_model=CalibrationScoreOut)
+def get_latest_calibration(user_id: int):
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT * FROM calibration_scores
+           WHERE user_id = ? ORDER BY computed_at DESC, score_id DESC LIMIT 1""",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="No calibration score found")
+    return dict(row)
