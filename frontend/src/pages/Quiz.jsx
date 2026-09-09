@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createSession, getQuestions, createResponse, createJournalEntry } from "../api";
+import AssistantWidget from "../components/AssistantWidget";
 
 const QUESTIONS_PER_QUIZ = 5;
 
@@ -121,6 +122,7 @@ export default function Quiz() {
           </button>
         </form>
         {error && <p role="alert">{error}</p>}
+        <AssistantWidget />
       </div>
     );
   }
@@ -154,6 +156,7 @@ export default function Quiz() {
 
         {error && <p role="alert">{error}</p>}
         <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+        <AssistantWidget sessionId={sessionId} />
       </div>
     );
   }
@@ -223,6 +226,7 @@ export default function Quiz() {
       )}
 
       {error && <p role="alert">{error}</p>}
+      <AssistantWidget sessionId={sessionId} />
     </div>
   );
 }

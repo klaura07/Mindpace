@@ -115,6 +115,28 @@ def generate_revision_guide(document_text: str) -> str:
     return _call_gemini(prompt)
 
 
+def ask_assistant(message: str, topic: str | None = None) -> str:
+    """
+    Sends a student's message to Gemini as a study-help assistant and
+    returns its reply. If `topic` is given (the student's current topic,
+    from session context), the assistant is told to focus help on it.
+    Raises RuntimeError on any API or parsing failure.
+    """
+    system_instruction = (
+        "You are a helpful, concise study assistant embedded in the MindPace "
+        "app. Keep replies short and focused on helping the student learn — "
+        "no padding or filler."
+    )
+    if topic:
+        system_instruction += (
+            f' The student is currently studying "{topic}"; tailor your help '
+            "to that topic when relevant."
+        )
+
+    prompt = f"{system_instruction}\n\nStudent: {message}\nAssistant:"
+    return _call_gemini(prompt).strip()
+
+
 def classify_theme(entry_text: str) -> str:
     """
     Classifies a student's post-quiz reflection into a short detected theme

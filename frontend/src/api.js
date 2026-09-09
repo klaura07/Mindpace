@@ -80,3 +80,11 @@ export function createJournalEntry(sessionId, entryText) {
     body: JSON.stringify({ session_id: sessionId, entry_text: entryText }),
   });
 }
+
+export function askAssistant(message, sessionId) {
+  return request("/assistant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionId ?? null }),
+  });
+}
