@@ -61,6 +61,10 @@ export function getCalibration(userId) {
   return request(`/calibration/${userId}`);
 }
 
+export function getCalibrationTrend(userId) {
+  return request(`/calibration/${userId}/trend`);
+}
+
 export function generateQuestions(topic, count = 5) {
   return request("/questions/generate", {
     method: "POST",
