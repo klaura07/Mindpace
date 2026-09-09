@@ -392,6 +392,12 @@ async def upload_document(user_id: int, file: UploadFile = File(...)):
         text = extract_text(file.filename, content)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # A wrong/unsupported extension raises ValueError (handled above);
+        # a matching extension with corrupt/unreadable content raises
+        # library-specific errors (e.g. pypdf's PdfReadError) that would
+        # otherwise escape as an unhandled 500.
+        raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
 
     conn = get_connection()
     try:
@@ -447,7 +453,7 @@ def generate_from_document(document_id: int):
         ).fetchone()
         if document is None:
             raise HTTPException(status_code=404, detail="Document not found")
-        if not document["extracted_text"]:
+        if not document["extracted_text"] or not document["extracted_text"].strip():
             raise HTTPException(
                 status_code=400, detail="Document has no extracted text to generate from"
             )
@@ -526,6 +532,9 @@ def get_learning_state(user_id: int):
 
 @app.post("/journal-entries", response_model=JournalEntryOut, status_code=201)
 def create_journal_entry(entry: JournalEntryCreate):
+    if not entry.entry_text.strip():
+        raise HTTPException(status_code=400, detail="entry_text cannot be empty")
+
     conn = get_connection()
     try:
         session = conn.execute(
@@ -572,6 +581,9 @@ ASSISTANT_RATE_LIMIT = RateLimiter(max_requests=10, window_seconds=60)
 
 @app.post("/assistant", response_model=AssistantResponse)
 def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="message cannot be empty")
+
     client_key = http_request.client.host if http_request.client else "unknown"
     allowed, retry_after = ASSISTANT_RATE_LIMIT.check(client_key)
     if not allowed:

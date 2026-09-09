@@ -19,6 +19,7 @@ export default function Quiz() {
   const [reflectionText, setReflectionText] = useState("");
   const [reflectionDone, setReflectionDone] = useState(false);
   const [reflectionLoading, setReflectionLoading] = useState(false);
+  const [questionStartedAt, setQuestionStartedAt] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,15 +31,24 @@ export default function Quiz() {
     setUserId(id);
   }, [navigate]);
 
+  useEffect(() => {
+    if (questions && index < questions.length) {
+      setQuestionStartedAt(Date.now());
+    }
+  }, [questions, index]);
+
   async function startQuiz(e) {
     e.preventDefault();
-    if (!topic.trim()) return;
+    const trimmedTopic = topic.trim();
+    if (!trimmedTopic) return;
     setLoading(true);
     setError(null);
     try {
-      const fetched = await getQuestions(topic.trim());
+      const fetched = await getQuestions(trimmedTopic);
       if (fetched.length === 0) {
-        setError(`No questions found for topic "${topic}". Try generating some from the dashboard first.`);
+        setError(
+          `No questions found for topic "${trimmedTopic}". Try generating some from the dashboard first.`
+        );
         return;
       }
       const session = await createSession(Number(userId));
@@ -63,6 +73,7 @@ export default function Quiz() {
         questionId: question.question_id,
         answerText: selectedAnswer,
         confidence: Number(confidence),
+        responseTimeMs: questionStartedAt ? Date.now() - questionStartedAt : null,
       });
       setFeedback(response);
     } catch (err) {

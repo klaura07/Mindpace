@@ -41,6 +41,28 @@ def test_call_gemini_timeout_raises_runtime_error(monkeypatch):
             gemini._call_gemini("hi")
 
 
+def test_call_gemini_http_error_429_is_sanitized(monkeypatch):
+    """
+    Gemini's actual 429 body is a large, technical JSON blob (quota details,
+    doc links, retry-after nesting). Callers must get a short, clean message
+    instead of that dumped straight into an end-user-facing error.
+    """
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    huge_body = json.dumps({"error": {"code": 429, "message": "quota exceeded" * 50}})
+    http_error = urllib.error.HTTPError(
+        url="https://example.com",
+        code=429,
+        msg="Too Many Requests",
+        hdrs=None,
+        fp=io.BytesIO(huge_body.encode()),
+    )
+    with patch("urllib.request.urlopen", side_effect=http_error):
+        with pytest.raises(RuntimeError) as exc_info:
+            gemini._call_gemini("hi")
+    assert "quota" in str(exc_info.value).lower()
+    assert len(str(exc_info.value)) < 100
+
+
 def test_call_gemini_http_error(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
     http_error = urllib.error.HTTPError(

@@ -70,7 +70,14 @@ def _call_gemini(prompt: str, response_schema: dict | None = None) -> str:
         error_body = e.read().decode()
         if os.getenv("DEBUG"):
             print(f"[gemini debug] {e.code} response body:\n{error_body}")
-        raise RuntimeError(f"Gemini API error: {e.code} {error_body}") from e
+        # The full error_body is only logged above (it's a large, technical
+        # payload from Gemini) — callers get a short, clean message instead
+        # of that raw JSON dumped straight into an end-user-facing error.
+        if e.code == 429:
+            raise RuntimeError(
+                "Gemini API rate limit or quota exceeded — please try again later."
+            ) from e
+        raise RuntimeError(f"Gemini API error: {e.code}") from e
     except urllib.error.URLError as e:
         raise RuntimeError(f"Gemini API unreachable: {e.reason}") from e
     except TimeoutError as e:
