@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 *.db
 .env
+
+# logs from start-all.ps1 / start-backend.ps1 / start-frontend.ps1
+*.log
