@@ -11,7 +11,7 @@ import json
 import sqlite3
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
@@ -23,6 +23,7 @@ from app.gemini import (
     generate_revision_guide,
 )
 from app.learning_state import classify_learning_state
+from app.rate_limit import RateLimiter
 from app.models import (
     AssistantRequest,
     AssistantResponse,
@@ -566,8 +567,20 @@ def list_journal_entries(user_id: int):
     return [dict(row) for row in rows]
 
 
+ASSISTANT_RATE_LIMIT = RateLimiter(max_requests=10, window_seconds=60)
+
+
 @app.post("/assistant", response_model=AssistantResponse)
-def ask_assistant_endpoint(request: AssistantRequest):
+def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
+    client_key = http_request.client.host if http_request.client else "unknown"
+    allowed, retry_after = ASSISTANT_RATE_LIMIT.check(client_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests to the assistant — please wait a moment and try again.",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+
     topic = None
     if request.session_id is not None:
         conn = get_connection()

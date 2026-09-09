@@ -73,6 +73,11 @@ def _call_gemini(prompt: str, response_schema: dict | None = None) -> str:
         raise RuntimeError(f"Gemini API error: {e.code} {error_body}") from e
     except urllib.error.URLError as e:
         raise RuntimeError(f"Gemini API unreachable: {e.reason}") from e
+    except TimeoutError as e:
+        # A read timeout on an already-open connection raises a bare
+        # TimeoutError, not URLError — catch it separately or it escapes
+        # as an unhandled 500 instead of a clean RuntimeError/502.
+        raise RuntimeError("Gemini API request timed out") from e
 
     try:
         return body["candidates"][0]["content"]["parts"][0]["text"]
