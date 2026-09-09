@@ -98,6 +98,17 @@ CREATE TABLE IF NOT EXISTS journal_entries (
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
 
+-- DOCUMENTS: uploaded files (PDF/docx/txt) with extracted text
+-- USERS (1) --UPLOADS--> (M) DOCUMENTS
+CREATE TABLE IF NOT EXISTS documents (
+    document_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL,
+    filename         TEXT NOT NULL,
+    extracted_text   TEXT,
+    uploaded_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- Indexes: the fatigue engine and calibration engine will query by these
 -- join columns on almost every request, so index them up front.
 CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id);
@@ -106,3 +117,4 @@ CREATE INDEX IF NOT EXISTS idx_state_logs_session ON cognitive_state_logs(sessio
 CREATE INDEX IF NOT EXISTS idx_calibration_user ON calibration_scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_probes_response ON socratic_probes(response_id);
 CREATE INDEX IF NOT EXISTS idx_journal_session ON journal_entries(session_id);
+CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
