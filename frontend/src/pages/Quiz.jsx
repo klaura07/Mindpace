@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createSession, getQuestions, createResponse } from "../api";
+import { createSession, getQuestions, createResponse, createJournalEntry } from "../api";
 
 const QUESTIONS_PER_QUIZ = 5;
 
@@ -15,6 +15,9 @@ export default function Quiz() {
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [reflectionText, setReflectionText] = useState("");
+  const [reflectionDone, setReflectionDone] = useState(false);
+  const [reflectionLoading, setReflectionLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -75,6 +78,29 @@ export default function Quiz() {
     setIndex((i) => i + 1);
   }
 
+  async function submitReflection(e) {
+    e.preventDefault();
+    if (!reflectionText.trim()) {
+      setReflectionDone(true);
+      return;
+    }
+    setReflectionLoading(true);
+    setError(null);
+    try {
+      await createJournalEntry(sessionId, reflectionText.trim());
+      setReflectionDone(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReflectionLoading(false);
+    }
+  }
+
+  function skipReflection() {
+    setReflectionText("");
+    setReflectionDone(true);
+  }
+
   if (!userId) return null;
 
   if (!questions) {
@@ -106,6 +132,27 @@ export default function Quiz() {
         <p>
           You answered {questions.length} question{questions.length === 1 ? "" : "s"} on "{topic}".
         </p>
+
+        {!reflectionDone && (
+          <form onSubmit={submitReflection}>
+            <label htmlFor="reflection">What tripped you up, in one line?</label>
+            <input
+              id="reflection"
+              type="text"
+              value={reflectionText}
+              onChange={(e) => setReflectionText(e.target.value)}
+              placeholder="Optional"
+            />
+            <button type="submit" disabled={reflectionLoading}>
+              {reflectionLoading ? "Saving..." : "Submit"}
+            </button>
+            <button type="button" onClick={skipReflection} disabled={reflectionLoading}>
+              Skip
+            </button>
+          </form>
+        )}
+
+        {error && <p role="alert">{error}</p>}
         <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
       </div>
     );

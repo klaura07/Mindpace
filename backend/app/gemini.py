@@ -115,6 +115,23 @@ def generate_revision_guide(document_text: str) -> str:
     return _call_gemini(prompt)
 
 
+def classify_theme(entry_text: str) -> str:
+    """
+    Classifies a student's post-quiz reflection into a short detected theme
+    (a few words, e.g. "confused formula vs concept"). Returns the theme as
+    a bare phrase. Raises RuntimeError on any API or parsing failure.
+    """
+    prompt = (
+        "A student just finished a quiz and wrote this one-line reflection on "
+        f"what tripped them up:\n\n\"{entry_text}\"\n\n"
+        "Classify it into a short theme, a few words only (e.g. \"confused "
+        "formula vs concept\", \"ran out of time\", \"second-guessed a correct "
+        "instinct\"). Reply with ONLY the theme phrase — no punctuation, no "
+        "quotes, no explanation."
+    )
+    return _call_gemini(prompt).strip()
+
+
 def generate_mcqs_from_document(document_text: str, count: int = 5) -> list[dict]:
     """
     Asks Gemini for `count` multiple-choice questions grounded specifically

@@ -15,12 +15,19 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
-from app.gemini import generate_mcqs, generate_mcqs_from_document, generate_revision_guide
+from app.gemini import (
+    classify_theme,
+    generate_mcqs,
+    generate_mcqs_from_document,
+    generate_revision_guide,
+)
 from app.learning_state import classify_learning_state
 from app.models import (
     CalibrationScoreOut,
     DocumentGenerateResponse,
     DocumentOut,
+    JournalEntryCreate,
+    JournalEntryOut,
     LearningStateTopicCounts,
     QuestionCreate,
     QuestionGenerateRequest,
@@ -499,3 +506,46 @@ def get_learning_state(user_id: int):
         ]
     finally:
         conn.close()
+
+
+@app.post("/journal-entries", response_model=JournalEntryOut, status_code=201)
+def create_journal_entry(entry: JournalEntryCreate):
+    conn = get_connection()
+    try:
+        session = conn.execute(
+            "SELECT 1 FROM sessions WHERE session_id = ?", (entry.session_id,)
+        ).fetchone()
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        try:
+            detected_theme = classify_theme(entry.entry_text)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+        cursor = conn.execute(
+            """INSERT INTO journal_entries (session_id, entry_text, detected_theme)
+               VALUES (?, ?, ?)""",
+            (entry.session_id, entry.entry_text, detected_theme),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM journal_entries WHERE entry_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@app.get("/journal-entries", response_model=list[JournalEntryOut])
+def list_journal_entries(user_id: int):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT j.* FROM journal_entries j
+           JOIN sessions s ON s.session_id = j.session_id
+           WHERE s.user_id = ?
+           ORDER BY j.entry_id""",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]

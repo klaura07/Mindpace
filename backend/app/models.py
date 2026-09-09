@@ -101,3 +101,16 @@ class DocumentGenerateResponse(BaseModel):
 class LearningStateTopicCounts(BaseModel):
     topic: str
     counts: dict[str, int]
+
+
+class JournalEntryCreate(BaseModel):
+    session_id: int
+    entry_text: str
+
+
+class JournalEntryOut(BaseModel):
+    entry_id: int
+    session_id: int
+    entry_text: str
+    detected_theme: str | None
+    created_at: str
