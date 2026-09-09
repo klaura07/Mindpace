@@ -40,7 +40,7 @@ export function getQuestions(topic) {
   return request(`/questions?topic=${encodeURIComponent(topic)}`);
 }
 
-export function createResponse({ sessionId, questionId, answerText, confidence }) {
+export function createResponse({ sessionId, questionId, answerText, confidence, responseTimeMs }) {
   return request("/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -49,6 +49,7 @@ export function createResponse({ sessionId, questionId, answerText, confidence }
       question_id: questionId,
       answer_text: answerText,
       confidence,
+      response_time_ms: responseTimeMs ?? null,
     }),
   });
 }
@@ -87,4 +88,25 @@ export function askAssistant(message, sessionId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, session_id: sessionId ?? null }),
   });
+}
+
+export function uploadDocument(userId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request(`/documents?user_id=${userId}`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function listDocuments(userId) {
+  return request(`/documents?user_id=${userId}`);
+}
+
+export function generateFromDocument(documentId) {
+  return request(`/documents/${documentId}/generate`, { method: "POST" });
+}
+
+export function getLearningState(userId) {
+  return request(`/learning-state/${userId}`);
 }
