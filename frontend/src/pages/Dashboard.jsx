@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { computeCalibration, getCalibration, generateQuestions } from "../api";
+import { computeCalibration, getCalibration, getCalibrationTrend, generateQuestions } from "../api";
 
 export default function Dashboard() {
   const [userId, setUserId] = useState(null);
   const [calibration, setCalibration] = useState(null);
   const [calibrationError, setCalibrationError] = useState(null);
+  const [calibrationTrend, setCalibrationTrend] = useState(null);
   const [topic, setTopic] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
@@ -41,6 +42,13 @@ export default function Dashboard() {
         setCalibrationError(
           err.status === 404 ? "No calibration data yet — complete a quiz first." : err.message
         );
+      }
+      try {
+        const trend = await getCalibrationTrend(userId);
+        setCalibrationTrend(trend);
+      } catch {
+        // Trend is a nice-to-have — the single-score display above already
+        // reports any real error, so fail quietly here.
       }
     })();
   }, [userId]);
@@ -84,6 +92,28 @@ export default function Dashboard() {
           </>
         )}
         {calibrationError && <p role="alert">{calibrationError}</p>}
+
+        {calibrationTrend && calibrationTrend.length > 0 && (
+          <>
+            <h3>Trend</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Computed at</th>
+                  <th>Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {calibrationTrend.map((point) => (
+                  <tr key={point.score_id}>
+                    <td>{point.computed_at}</td>
+                    <td>{point.calibration_gap.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </section>
 
       <section>
