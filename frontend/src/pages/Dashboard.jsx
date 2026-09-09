@@ -142,8 +142,22 @@ export default function Dashboard() {
 
   if (!userId) return null;
 
+  // Light gamification: a "well-calibrated streak" (trailing trend points
+  // with a small gap, most recent first) and an XP/level readout derived
+  // from how many calibration checkpoints exist — both computed from data
+  // already on the page, no new backend calls.
+  let calibrationStreak = 0;
+  if (calibrationTrend) {
+    for (let i = calibrationTrend.length - 1; i >= 0; i--) {
+      if (Math.abs(calibrationTrend[i].calibration_gap) < 0.15) calibrationStreak++;
+      else break;
+    }
+  }
+  const xp = (calibrationTrend?.length ?? 0) * 10;
+  const level = Math.floor(xp / 30) + 1;
+
   return (
-    <div>
+    <div className="fade-in">
       <h1>Dashboard</h1>
       <p>Logged in as user #{userId}</p>
 
@@ -152,7 +166,7 @@ export default function Dashboard() {
         {calibration && (
           <>
             <p>
-              <strong>{calibration.calibration_gap.toFixed(3)}</strong>
+              <strong className="glow-stat">{calibration.calibration_gap.toFixed(3)}</strong>
             </p>
             <p>Positive means overconfident, negative means underconfident.</p>
           </>
@@ -161,6 +175,14 @@ export default function Dashboard() {
 
         {calibrationTrend && calibrationTrend.length > 0 && (
           <>
+            <div className="badge-row">
+              {calibrationStreak > 1 && (
+                <span className="badge badge-streak">
+                  🔥 {calibrationStreak} well-calibrated in a row
+                </span>
+              )}
+              <span className="badge badge-xp">⭐ Level {level} · {xp} XP</span>
+            </div>
             <h3>Trend</h3>
             <table>
               <thead>
@@ -238,7 +260,7 @@ export default function Dashboard() {
                   <p role="alert">{docGenerateErrors[doc.document_id]}</p>
                 )}
                 {docGenerateResults[doc.document_id] && (
-                  <div>
+                  <div className="fade-in">
                     <h3>Revision guide</h3>
                     <p style={{ whiteSpace: "pre-wrap" }}>
                       {docGenerateResults[doc.document_id].revision_guide}

@@ -30,12 +30,13 @@ export default function AssistantWidget({ sessionId }) {
     <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 1000 }}>
       {open ? (
         <div
+          className="fade-in"
           style={{
             width: 320,
             maxHeight: 420,
             display: "flex",
             flexDirection: "column",
-            background: "var(--bg)",
+            background: "var(--bg-elevated)",
             border: "1px solid var(--border)",
             borderRadius: 10,
             boxShadow: "var(--shadow)",

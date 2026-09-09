@@ -20,6 +20,8 @@ export default function Quiz() {
   const [reflectionDone, setReflectionDone] = useState(false);
   const [reflectionLoading, setReflectionLoading] = useState(false);
   const [questionStartedAt, setQuestionStartedAt] = useState(null);
+  const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -76,6 +78,11 @@ export default function Quiz() {
         responseTimeMs: questionStartedAt ? Date.now() - questionStartedAt : null,
       });
       setFeedback(response);
+      setStreak((s) => {
+        const next = response.is_correct ? s + 1 : 0;
+        setBestStreak((best) => Math.max(best, next));
+        return next;
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -117,7 +124,7 @@ export default function Quiz() {
 
   if (!questions) {
     return (
-      <div>
+      <div className="fade-in">
         <h1>Quiz</h1>
         <form onSubmit={startQuiz}>
           <label htmlFor="topic">Topic</label>
@@ -140,11 +147,16 @@ export default function Quiz() {
 
   if (index >= questions.length) {
     return (
-      <div>
+      <div className="fade-in">
         <h1>Done!</h1>
         <p>
           You answered {questions.length} question{questions.length === 1 ? "" : "s"} on "{topic}".
         </p>
+        {bestStreak > 1 && (
+          <div className="badge-row">
+            <span className="badge badge-streak">🔥 Best streak: {bestStreak}</span>
+          </div>
+        )}
 
         {!reflectionDone && (
           <form onSubmit={submitReflection}>
@@ -175,15 +187,20 @@ export default function Quiz() {
   const question = questions[index];
 
   return (
-    <div>
+    <div className="fade-in">
       <h1>Quiz</h1>
       <p>
         Question {index + 1} of {questions.length}
       </p>
+      {streak > 1 && (
+        <div className="badge-row">
+          <span className="badge badge-streak">🔥 Streak: {streak}</span>
+        </div>
+      )}
       <h2>{question.prompt_text}</h2>
 
       {feedback ? (
-        <div>
+        <div className="fade-in" key={index}>
           <p>{feedback.is_correct ? "Correct!" : "Incorrect."}</p>
           <p>Your answer: {feedback.answer_text}</p>
           <button onClick={nextQuestion}>Next</button>

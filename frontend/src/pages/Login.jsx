@@ -35,7 +35,7 @@ export default function Login() {
   }
 
   return (
-    <div>
+    <div className="fade-in">
       <h1>MindPace</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="email">Email</label>
