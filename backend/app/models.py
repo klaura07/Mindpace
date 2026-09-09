@@ -91,3 +91,8 @@ class DocumentOut(BaseModel):
     filename: str
     extracted_text: str | None
     uploaded_at: str
+
+
+class DocumentGenerateResponse(BaseModel):
+    revision_guide: str
+    questions: list[QuestionOut]

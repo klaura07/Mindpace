@@ -15,9 +15,10 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
-from app.gemini import generate_mcqs
+from app.gemini import generate_mcqs, generate_mcqs_from_document, generate_revision_guide
 from app.models import (
     CalibrationScoreOut,
+    DocumentGenerateResponse,
     DocumentOut,
     QuestionCreate,
     QuestionGenerateRequest,
@@ -410,3 +411,54 @@ def list_documents(user_id: int):
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+@app.post("/documents/{document_id}/generate", response_model=DocumentGenerateResponse, status_code=201)
+def generate_from_document(document_id: int):
+    conn = get_connection()
+    try:
+        document = conn.execute(
+            "SELECT * FROM documents WHERE document_id = ?", (document_id,)
+        ).fetchone()
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if not document["extracted_text"]:
+            raise HTTPException(
+                status_code=400, detail="Document has no extracted text to generate from"
+            )
+
+        document_text = document["extracted_text"]
+        topic = document["filename"].rsplit(".", 1)[0]
+
+        try:
+            revision_guide = generate_revision_guide(document_text)
+            generated = generate_mcqs_from_document(document_text, count=5)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+        created = []
+        for q in generated:
+            cursor = conn.execute(
+                """INSERT INTO questions
+                   (topic, prompt_text, question_type, options, correct_answer, difficulty)
+                   VALUES (?, ?, 'mcq', ?, ?, ?)""",
+                (
+                    topic,
+                    q["prompt_text"],
+                    json.dumps(q["options"]),
+                    q["correct_answer"],
+                    q["difficulty"],
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM questions WHERE question_id = ?", (cursor.lastrowid,)
+            ).fetchone()
+            created.append(_row_to_question(row))
+        conn.commit()
+
+        return {"revision_guide": revision_guide, "questions": created}
+    except (sqlite3.IntegrityError, KeyError) as e:
+        conn.rollback()
+        raise HTTPException(status_code=502, detail=f"Malformed question from Gemini: {e}")
+    finally:
+        conn.close()
