@@ -369,6 +369,18 @@ def get_latest_calibration(user_id: int):
     return dict(row)
 
 
+@app.get("/calibration/{user_id}/trend", response_model=list[CalibrationScoreOut])
+def get_calibration_trend(user_id: int):
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT * FROM calibration_scores
+           WHERE user_id = ? ORDER BY computed_at ASC, score_id ASC""",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 @app.post("/documents", response_model=DocumentOut, status_code=201)
 async def upload_document(user_id: int, file: UploadFile = File(...)):
     content = await file.read()
