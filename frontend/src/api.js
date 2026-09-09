@@ -68,3 +68,11 @@ export function generateQuestions(topic, count = 5) {
     body: JSON.stringify({ topic, count }),
   });
 }
+
+export function createJournalEntry(sessionId, entryText) {
+  return request("/journal-entries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, entry_text: entryText }),
+  });
+}
