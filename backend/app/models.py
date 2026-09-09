@@ -96,3 +96,8 @@ class DocumentOut(BaseModel):
 class DocumentGenerateResponse(BaseModel):
     revision_guide: str
     questions: list[QuestionOut]
+
+
+class LearningStateTopicCounts(BaseModel):
+    topic: str
+    counts: dict[str, int]

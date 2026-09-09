@@ -16,10 +16,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
 from app.gemini import generate_mcqs, generate_mcqs_from_document, generate_revision_guide
+from app.learning_state import classify_learning_state
 from app.models import (
     CalibrationScoreOut,
     DocumentGenerateResponse,
     DocumentOut,
+    LearningStateTopicCounts,
     QuestionCreate,
     QuestionGenerateRequest,
     QuestionOut,
@@ -460,5 +462,40 @@ def generate_from_document(document_id: int):
     except (sqlite3.IntegrityError, KeyError) as e:
         conn.rollback()
         raise HTTPException(status_code=502, detail=f"Malformed question from Gemini: {e}")
+    finally:
+        conn.close()
+
+
+@app.get("/learning-state/{user_id}", response_model=list[LearningStateTopicCounts])
+def get_learning_state(user_id: int):
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        rows = conn.execute(
+            """SELECT q.topic, r.confidence, r.is_correct, r.response_time_ms
+               FROM responses r
+               JOIN sessions s ON s.session_id = r.session_id
+               JOIN questions q ON q.question_id = r.question_id
+               WHERE s.user_id = ?""",
+            (user_id,),
+        ).fetchall()
+
+        counts_by_topic: dict[str, dict[str, int]] = {}
+        for row in rows:
+            label = classify_learning_state(
+                row["confidence"], bool(row["is_correct"]), row["response_time_ms"]
+            )
+            topic_counts = counts_by_topic.setdefault(row["topic"], {})
+            topic_counts[label] = topic_counts.get(label, 0) + 1
+
+        return [
+            {"topic": topic, "counts": topic_counts}
+            for topic, topic_counts in counts_by_topic.items()
+        ]
     finally:
         conn.close()
