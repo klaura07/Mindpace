@@ -11,13 +11,14 @@ import json
 import sqlite3
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
 from app.gemini import generate_mcqs
 from app.models import (
     CalibrationScoreOut,
+    DocumentOut,
     QuestionCreate,
     QuestionGenerateRequest,
     QuestionOut,
@@ -28,6 +29,7 @@ from app.models import (
     UserCreate,
     UserOut,
 )
+from app.text_extraction import extract_text
 
 
 @asynccontextmanager
@@ -355,3 +357,56 @@ def get_latest_calibration(user_id: int):
     if row is None:
         raise HTTPException(status_code=404, detail="No calibration score found")
     return dict(row)
+
+
+@app.post("/documents", response_model=DocumentOut, status_code=201)
+async def upload_document(user_id: int, file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        text = extract_text(file.filename, content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor = conn.execute(
+            """INSERT INTO documents (user_id, filename, extracted_text)
+               VALUES (?, ?, ?)""",
+            (user_id, file.filename, text),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM documents WHERE document_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@app.get("/documents/{document_id}", response_model=DocumentOut)
+def get_document(document_id: int):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM documents WHERE document_id = ?", (document_id,)
+    ).fetchone()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return dict(row)
+
+
+@app.get("/documents", response_model=list[DocumentOut])
+def list_documents(user_id: int):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM documents WHERE user_id = ? ORDER BY document_id",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]

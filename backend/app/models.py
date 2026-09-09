@@ -83,3 +83,11 @@ class CalibrationScoreOut(BaseModel):
 class QuestionGenerateRequest(BaseModel):
     topic: str
     count: int = 5
+
+
+class DocumentOut(BaseModel):
+    document_id: int
+    user_id: int
+    filename: str
+    extracted_text: str | None
+    uploaded_at: str
