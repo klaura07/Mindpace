@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
 from app.gemini import (
+    ask_assistant,
     classify_theme,
     generate_mcqs,
     generate_mcqs_from_document,
@@ -23,6 +24,8 @@ from app.gemini import (
 )
 from app.learning_state import classify_learning_state
 from app.models import (
+    AssistantRequest,
+    AssistantResponse,
     CalibrationScoreOut,
     DocumentGenerateResponse,
     DocumentOut,
@@ -561,3 +564,29 @@ def list_journal_entries(user_id: int):
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+@app.post("/assistant", response_model=AssistantResponse)
+def ask_assistant_endpoint(request: AssistantRequest):
+    topic = None
+    if request.session_id is not None:
+        conn = get_connection()
+        # Best-effort context: the topic of the most recent question answered
+        # in this session, if any. A missing/unknown session just means no
+        # topic context, not an error — this endpoint doesn't write anything.
+        row = conn.execute(
+            """SELECT q.topic FROM responses r
+               JOIN questions q ON q.question_id = r.question_id
+               WHERE r.session_id = ?
+               ORDER BY r.response_id DESC LIMIT 1""",
+            (request.session_id,),
+        ).fetchone()
+        conn.close()
+        topic = row["topic"] if row else None
+
+    try:
+        reply = ask_assistant(request.message, topic=topic)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return {"reply": reply}

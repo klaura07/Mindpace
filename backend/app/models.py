@@ -114,3 +114,12 @@ class JournalEntryOut(BaseModel):
     entry_text: str
     detected_theme: str | None
     created_at: str
+
+
+class AssistantRequest(BaseModel):
+    message: str
+    session_id: int | None = None
+
+
+class AssistantResponse(BaseModel):
+    reply: str

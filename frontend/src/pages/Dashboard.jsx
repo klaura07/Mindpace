@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { computeCalibration, getCalibration, getCalibrationTrend, generateQuestions } from "../api";
+import AssistantWidget from "../components/AssistantWidget";
 
 export default function Dashboard() {
   const [userId, setUserId] = useState(null);
@@ -137,6 +138,8 @@ export default function Dashboard() {
 
       <button onClick={() => navigate("/quiz")}>Start Quiz</button>
       <button onClick={handleLogout}>Log out</button>
+
+      <AssistantWidget />
     </div>
   );
 }
