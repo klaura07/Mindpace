@@ -98,6 +98,23 @@ CREATE TABLE IF NOT EXISTS journal_entries (
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
 
+-- REVIEW_ITEMS: spaced-repetition schedule, one row per (user, question)
+-- the user has ever gotten wrong. An incorrect response schedules it a
+-- few days out; a correct response pushes the interval further out and
+-- eventually clears the row once the question is considered mastered.
+-- USERS (1) --SCHEDULES--> (M) REVIEW_ITEMS <--FOR-- (1) QUESTIONS
+CREATE TABLE IF NOT EXISTS review_items (
+    review_item_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL,
+    question_id         INTEGER NOT NULL,
+    interval_days       INTEGER NOT NULL DEFAULT 2,
+    next_review_date    TEXT NOT NULL,
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(question_id) ON DELETE CASCADE,
+    UNIQUE (user_id, question_id)
+);
+
 -- DOCUMENTS: uploaded files (PDF/docx/txt) with extracted text
 -- USERS (1) --UPLOADS--> (M) DOCUMENTS
 CREATE TABLE IF NOT EXISTS documents (
@@ -118,3 +135,5 @@ CREATE INDEX IF NOT EXISTS idx_calibration_user ON calibration_scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_probes_response ON socratic_probes(response_id);
 CREATE INDEX IF NOT EXISTS idx_journal_session ON journal_entries(session_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_review_items_user ON review_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_review_items_due ON review_items(user_id, next_review_date);

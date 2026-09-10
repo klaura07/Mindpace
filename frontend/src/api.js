@@ -110,3 +110,7 @@ export function generateFromDocument(documentId) {
 export function getLearningState(userId) {
   return request(`/learning-state/${userId}`);
 }
+
+export function getDueReviewItems(userId) {
+  return request(`/review/${userId}`);
+}
