@@ -1,25 +1,31 @@
 :root {
-  /* Calm, cream-and-sage palette — the app's one designed look. */
+  /* Calm, cool-olive-and-sage palette — the app's one designed look.
+     Backgrounds are a neutral, cooled-down olive (not warm cream/tan);
+     text stays brown for contrast against them. */
   --text: #5c5644;
   --text-h: #24211a;
-  --bg: #f3ecdc;
-  --bg-elevated: #faf6ea;
-  --border: #ddd0ac;
-  --code-bg: #ece0c2;
+  --bg: #e6e5d5;
+  --bg-elevated: #f1f0e5;
+  --border: #cdccb6;
+  --code-bg: #dfddc9;
 
-  /* Sage green accent system — three cohesive shades, used in place of
-     the previous amber/gold: --accent as the primary interactive color,
-     --accent-deep as the darker second shade (streak/emphasis states). */
-  --accent: #87a96b;
-  --accent-deep: #5e7f49;
-  --accent-bg: rgba(135, 169, 107, 0.16);
-  --accent-border: rgba(135, 169, 107, 0.55);
-  --accent-glow: rgba(135, 169, 107, 0.45);
-  --gold: #5e7f49;
-  --gold-bg: rgba(94, 127, 73, 0.16);
-  --gold-border: rgba(94, 127, 73, 0.55);
-  --gold-glow: rgba(94, 127, 73, 0.45);
-  --social-bg: rgba(243, 236, 220, 0.6);
+  /* Sage green accent system — three cohesive shades, entirely replacing
+     the previous amber/gold. --accent is the primary interactive color,
+     --accent-light a solid, visible tint for badge/active-state fills
+     (deliberately opaque, not a faint overlay), --accent-deep the dark
+     shade for hover/emphasis. --gold is kept only as an alias so nothing
+     else has to change name — it now points at --accent-deep. */
+  --accent: #7a9471;
+  --accent-light: #a8c090;
+  --accent-deep: #5c7350;
+  --accent-bg: rgba(122, 148, 113, 0.22);
+  --accent-border: rgba(122, 148, 113, 0.65);
+  --accent-glow: rgba(122, 148, 113, 0.5);
+  --gold: #5c7350;
+  --gold-bg: rgba(92, 115, 80, 0.22);
+  --gold-border: rgba(92, 115, 80, 0.65);
+  --gold-glow: rgba(92, 115, 80, 0.5);
+  --social-bg: rgba(230, 229, 213, 0.6);
   --shadow:
     rgba(76, 68, 48, 0.14) 0 10px 15px -3px, rgba(76, 68, 48, 0.1) 0 4px 6px -2px;
 
@@ -32,7 +38,11 @@
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
-  font-synthesis: none;
+  /* Tenor Sans ships only a single 400 weight from Google Fonts — no
+     600/700 cut exists to load. "weight" (not "none") is required here
+     so the browser can still fake-embolden it for headlines/stats;
+     synthetic italic/small-caps stay disabled. */
+  font-synthesis: weight;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -80,7 +90,7 @@ body {
 
 .sidebar-brand {
   font-family: var(--heading);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 20px;
   color: var(--text-h);
   padding: 8px 12px 20px;
@@ -112,9 +122,27 @@ body {
 }
 
 .sidebar-link.active {
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
   color: var(--text-h);
+  font-weight: 600;
+}
+
+.sidebar-nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar-link:hover .sidebar-nav-icon {
+  color: var(--accent);
+  transform: scale(1.1);
+}
+
+.sidebar-link.active .sidebar-nav-icon {
+  color: var(--accent-deep);
 }
 
 .sidebar-icon {
@@ -149,17 +177,25 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 20px 12px 20px 12px;
+  box-shadow: var(--shadow);
   text-decoration: none;
   color: var(--text);
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.module-list li:nth-child(even) .module-card {
+  border-radius: 12px 20px 12px 20px;
 }
 
 .module-card:hover {
-  border-color: var(--accent-border);
+  border-color: var(--accent);
   background: var(--bg-elevated);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 26px -14px var(--accent-glow), var(--shadow);
 }
 
 .module-card strong {
@@ -174,7 +210,7 @@ h1,
 h2,
 h3 {
   font-family: var(--heading);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--text-h);
 }
 
@@ -250,8 +286,20 @@ form input[type="email"] {
 form input[type="text"]:focus,
 form input[type="email"]:focus {
   outline: none;
-  border-color: var(--accent-border);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+/* Confidence slider — the app's one progress-style indicator, previously
+   left as an unstyled native control (browser default track/thumb, no
+   theme color at all). */
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  cursor: pointer;
 }
 
 fieldset {
@@ -273,21 +321,27 @@ fieldset label {
 
 button {
   padding: 8px 16px;
-  border-radius: 6px;
-  border: 1px solid var(--accent-border);
-  background: var(--accent-bg);
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-light);
   color: var(--text-h);
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg-elevated);
   box-shadow: 0 0 10px var(--accent-glow);
+  transform: translateY(-1px) scale(1.03);
 }
 
 button:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(0.97);
+  transition-duration: 0.05s;
 }
 
 button:disabled {
@@ -300,9 +354,18 @@ button + button {
 }
 
 section {
-  max-width: 420px;
-  margin: 24px auto;
+  max-width: 460px;
+  margin: 20px auto;
+  padding: 20px 22px;
   text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 22px 14px 22px 14px;
+  box-shadow: var(--shadow);
+}
+
+section:nth-of-type(even) {
+  border-radius: 14px 22px 14px 22px;
 }
 
 table {
@@ -359,7 +422,8 @@ th {
   padding: 6px 14px;
   border-radius: 10px;
   background: var(--bg-elevated);
-  border: 1px solid var(--accent-border);
+  border: 1px solid var(--accent);
+  font-weight: 700;
   animation: glow-pulse 3.2s ease-in-out infinite;
 }
 
@@ -370,22 +434,16 @@ th {
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .badge-streak {
-  background: var(--gold-bg);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
+  background: var(--accent-light);
+  border: 1px solid var(--accent-deep);
+  color: var(--accent-deep);
   --glow-color: var(--gold-glow);
   animation: glow-pulse 3.2s ease-in-out infinite;
-}
-
-.badge-xp {
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  color: var(--accent);
 }
 
 .badge-row {
@@ -399,10 +457,198 @@ th {
   .fade-in,
   .glow-stat,
   .badge-streak,
+  .answer-correct,
+  .answer-incorrect,
   button {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---- Answer feedback micro-interactions ---- */
+
+@keyframes pop-correct {
+  0% {
+    transform: scale(0.92);
+  }
+  55% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.answer-correct {
+  animation: pop-correct 0.4s ease;
+}
+
+@keyframes shake-incorrect {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.answer-incorrect {
+  animation: shake-incorrect 0.4s ease;
+}
+
+/* ---- Confetti burst (streak increases) ---- */
+
+.confetti-burst {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.confetti-burst i {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  animation: confetti-pop 900ms ease-out forwards;
+}
+
+@keyframes confetti-pop {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--drift, 20px), 90px) rotate(280deg);
+    opacity: 0;
+  }
+}
+
+/* ---- Level ring (XP/level, replacing a plain-text pill) ---- */
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+}
+
+.level-ring {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.level-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.level-ring circle.track {
+  fill: none;
+  stroke: var(--bg-elevated);
+  stroke-width: 4;
+}
+
+.level-ring circle.progress {
+  fill: none;
+  stroke: var(--accent-deep);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.level-ring .level-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.level-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  font-size: 12px;
+}
+
+.level-text strong {
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.level-text span {
+  color: var(--accent-deep);
+  font-family: var(--mono);
+}
+
+/* ---- Filled progress bar (streak/level utility) ---- */
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* ---- Friendly empty states ---- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 28px 16px;
+  color: var(--text);
+}
+
+.empty-state svg {
+  width: 56px;
+  height: 56px;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.empty-state strong {
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.empty-state span {
+  font-size: 13px;
+  color: var(--text);
+  max-width: 32ch;
 }
 
 /* ---- Cursor trailing glow ---- */
@@ -429,4 +675,24 @@ th {
   .cursor-glow {
     display: none;
   }
+}
+
+/* ---- Unwind: falling-sand canvas ---- */
+
+.unwind-canvas-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--bg-elevated);
+}
+
+.unwind-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 220 / 140;
+  image-rendering: pixelated;
+  cursor: pointer;
+  touch-action: none;
 }

@@ -7,6 +7,8 @@ import {
   getCalibrationTrend,
   getLearningState,
 } from "../api";
+import EmptyState from "../components/EmptyState";
+import LevelRing from "../components/LevelRing";
 
 export default function Dashboard() {
   const [userId, setUserId] = useState(null);
@@ -129,7 +131,13 @@ export default function Dashboard() {
                   🔥 {calibrationStreak} well-calibrated in a row
                 </span>
               )}
-              <span className="badge badge-xp">⭐ Level {level} · {xp} XP</span>
+              <div className="level-badge">
+                <LevelRing level={level} progress={(xp % 30) / 30} />
+                <div className="level-text">
+                  <strong>Level {level}</strong>
+                  <span>{xp} XP</span>
+                </div>
+              </div>
             </div>
             <h3>Trend</h3>
             <table>
@@ -195,7 +203,10 @@ export default function Dashboard() {
             </tbody>
           </table>
         ) : (
-          <p>No learning-state data yet — complete a quiz first.</p>
+          <EmptyState
+            title="Nothing to show yet"
+            message="Complete a quiz first and your learning state will show up here."
+          />
         )}
         {learningStateError && <p role="alert">{learningStateError}</p>}
       </section>

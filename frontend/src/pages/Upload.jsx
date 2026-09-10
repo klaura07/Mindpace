@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateFromDocument, listDocuments, uploadDocument } from "../api";
+import EmptyState from "../components/EmptyState";
 
 export default function Upload() {
   const [userId, setUserId] = useState(null);
@@ -89,6 +90,13 @@ export default function Upload() {
         </form>
         {uploadError && <p role="alert">{uploadError}</p>}
         {documentsError && <p role="alert">{documentsError}</p>}
+
+        {documents.length === 0 && !documentsError && (
+          <EmptyState
+            title="No documents yet"
+            message="Upload your first PDF, DOCX, or TXT above to generate a revision guide and quiz questions."
+          />
+        )}
 
         {documents.length > 0 && (
           <ul>

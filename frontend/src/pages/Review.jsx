@@ -7,6 +7,7 @@ import {
   getLearningState,
   reframeQuestion,
 } from "../api";
+import EmptyState from "../components/EmptyState";
 
 // Labels from classify_learning_state (backend) that indicate an incorrect
 // response. There's no dedicated "review" system yet, so we reuse the
@@ -137,7 +138,10 @@ export default function Review() {
         <h2>Due for review</h2>
         {dueError && <p role="alert">{dueError}</p>}
         {dueItems && dueItems.length === 0 && (
-          <p>Nothing due for review right now — check back after your next quiz.</p>
+          <EmptyState
+            title="All caught up"
+            message="Nothing due for review right now — check back after your next quiz."
+          />
         )}
         {dueItems && dueItems.length > 0 && (
           <ul>
@@ -214,7 +218,10 @@ export default function Review() {
       {error && <p role="alert">{error}</p>}
 
       {learningState && weakByTopic.length === 0 && (
-        <p>No weak areas found yet — complete a quiz first.</p>
+        <EmptyState
+          title="No weak spots found"
+          message="Complete a quiz first and any topics you struggle with will show up here."
+        />
       )}
 
       {weakByTopic.length > 0 && (

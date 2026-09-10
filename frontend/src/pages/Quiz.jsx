@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createSession, getQuestions, createResponse, createJournalEntry } from "../api";
 import { useAssistantSession } from "../context/AssistantSessionContext";
+import ConfettiBurst from "../components/ConfettiBurst";
 
 const QUESTIONS_PER_QUIZ = 5;
 
@@ -23,6 +24,7 @@ export default function Quiz() {
   const [questionStartedAt, setQuestionStartedAt] = useState(null);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
+  const [celebrate, setCelebrate] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -83,6 +85,7 @@ export default function Quiz() {
       setStreak((s) => {
         const next = response.is_correct ? s + 1 : 0;
         setBestStreak((best) => Math.max(best, next));
+        if (response.is_correct && next >= 2) setCelebrate((c) => c + 1);
         return next;
       });
     } catch (err) {
@@ -128,20 +131,22 @@ export default function Quiz() {
     return (
       <div className="fade-in">
         <h1>Quiz</h1>
-        <form onSubmit={startQuiz}>
-          <label htmlFor="topic">Topic</label>
-          <input
-            id="topic"
-            type="text"
-            required
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? "Starting..." : "Start Quiz"}
-          </button>
-        </form>
-        {error && <p role="alert">{error}</p>}
+        <section>
+          <form onSubmit={startQuiz}>
+            <label htmlFor="topic">Topic</label>
+            <input
+              id="topic"
+              type="text"
+              required
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
+            <button type="submit" disabled={loading}>
+              {loading ? "Starting..." : "Start Quiz"}
+            </button>
+          </form>
+          {error && <p role="alert">{error}</p>}
+        </section>
       </div>
     );
   }
@@ -150,36 +155,39 @@ export default function Quiz() {
     return (
       <div className="fade-in">
         <h1>Done!</h1>
-        <p>
-          You answered {questions.length} question{questions.length === 1 ? "" : "s"} on "{topic}".
-        </p>
-        {bestStreak > 1 && (
-          <div className="badge-row">
-            <span className="badge badge-streak">🔥 Best streak: {bestStreak}</span>
-          </div>
-        )}
+        <section>
+          <p>
+            You answered {questions.length} question{questions.length === 1 ? "" : "s"} on "
+            {topic}".
+          </p>
+          {bestStreak > 1 && (
+            <div className="badge-row">
+              <span className="badge badge-streak">🔥 Best streak: {bestStreak}</span>
+            </div>
+          )}
 
-        {!reflectionDone && (
-          <form onSubmit={submitReflection}>
-            <label htmlFor="reflection">What tripped you up, in one line?</label>
-            <input
-              id="reflection"
-              type="text"
-              value={reflectionText}
-              onChange={(e) => setReflectionText(e.target.value)}
-              placeholder="Optional"
-            />
-            <button type="submit" disabled={reflectionLoading}>
-              {reflectionLoading ? "Saving..." : "Submit"}
-            </button>
-            <button type="button" onClick={skipReflection} disabled={reflectionLoading}>
-              Skip
-            </button>
-          </form>
-        )}
+          {!reflectionDone && (
+            <form onSubmit={submitReflection}>
+              <label htmlFor="reflection">What tripped you up, in one line?</label>
+              <input
+                id="reflection"
+                type="text"
+                value={reflectionText}
+                onChange={(e) => setReflectionText(e.target.value)}
+                placeholder="Optional"
+              />
+              <button type="submit" disabled={reflectionLoading}>
+                {reflectionLoading ? "Saving..." : "Submit"}
+              </button>
+              <button type="button" onClick={skipReflection} disabled={reflectionLoading}>
+                Skip
+              </button>
+            </form>
+          )}
 
-        {error && <p role="alert">{error}</p>}
-        <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+          {error && <p role="alert">{error}</p>}
+          <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+        </section>
       </div>
     );
   }
@@ -189,71 +197,74 @@ export default function Quiz() {
   return (
     <div className="fade-in">
       <h1>Quiz</h1>
-      <p>
-        Question {index + 1} of {questions.length}
-      </p>
-      {streak > 1 && (
-        <div className="badge-row">
-          <span className="badge badge-streak">🔥 Streak: {streak}</span>
-        </div>
-      )}
-      <h2>{question.prompt_text}</h2>
+      <section>
+        <p>
+          Question {index + 1} of {questions.length}
+        </p>
+        {streak > 1 && (
+          <div className="badge-row" style={{ position: "relative" }}>
+            <span className="badge badge-streak">🔥 Streak: {streak}</span>
+            <ConfettiBurst trigger={celebrate} />
+          </div>
+        )}
+        <h2>{question.prompt_text}</h2>
 
-      {feedback ? (
-        <div className="fade-in" key={index}>
-          <p>{feedback.is_correct ? "Correct!" : "Incorrect."}</p>
-          <p>Your answer: {feedback.answer_text}</p>
-          <button onClick={nextQuestion}>Next</button>
-        </div>
-      ) : (
-        <form onSubmit={submitAnswer}>
-          {question.options && question.options.length > 0 ? (
-            <fieldset>
-              {question.options.map((option) => (
-                <label key={option}>
-                  <input
-                    type="radio"
-                    name="answer"
-                    value={option}
-                    checked={selectedAnswer === option}
-                    onChange={(e) => setSelectedAnswer(e.target.value)}
-                    required
-                  />
-                  {option}
-                </label>
-              ))}
-            </fieldset>
-          ) : (
-            <div>
-              <label htmlFor="free-answer">Your answer</label>
-              <input
-                id="free-answer"
-                type="text"
-                required
-                value={selectedAnswer}
-                onChange={(e) => setSelectedAnswer(e.target.value)}
-              />
-            </div>
-          )}
+        {feedback ? (
+          <div className={feedback.is_correct ? "answer-correct" : "answer-incorrect"} key={index}>
+            <p>{feedback.is_correct ? "Correct!" : "Incorrect."}</p>
+            <p>Your answer: {feedback.answer_text}</p>
+            <button onClick={nextQuestion}>Next</button>
+          </div>
+        ) : (
+          <form onSubmit={submitAnswer}>
+            {question.options && question.options.length > 0 ? (
+              <fieldset>
+                {question.options.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="radio"
+                      name="answer"
+                      value={option}
+                      checked={selectedAnswer === option}
+                      onChange={(e) => setSelectedAnswer(e.target.value)}
+                      required
+                    />
+                    {option}
+                  </label>
+                ))}
+              </fieldset>
+            ) : (
+              <div>
+                <label htmlFor="free-answer">Your answer</label>
+                <input
+                  id="free-answer"
+                  type="text"
+                  required
+                  value={selectedAnswer}
+                  onChange={(e) => setSelectedAnswer(e.target.value)}
+                />
+              </div>
+            )}
 
-          <label htmlFor="confidence">Confidence: {confidence}</label>
-          <input
-            id="confidence"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={confidence}
-            onChange={(e) => setConfidence(e.target.value)}
-          />
+            <label htmlFor="confidence">Confidence: {confidence}</label>
+            <input
+              id="confidence"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={confidence}
+              onChange={(e) => setConfidence(e.target.value)}
+            />
 
-          <button type="submit" disabled={loading || !selectedAnswer}>
-            {loading ? "Submitting..." : "Submit"}
-          </button>
-        </form>
-      )}
+            <button type="submit" disabled={loading || !selectedAnswer}>
+              {loading ? "Submitting..." : "Submit"}
+            </button>
+          </form>
+        )}
 
-      {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{error}</p>}
+      </section>
     </div>
   );
 }
