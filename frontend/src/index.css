@@ -54,6 +54,117 @@ body {
   box-sizing: border-box;
 }
 
+/* ---- Sidebar layout ---- */
+
+.app-shell {
+  display: flex;
+  flex: 1;
+  min-height: 100svh;
+  text-align: left;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  padding: 20px 12px;
+  border-right: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.sidebar-brand {
+  font-family: var(--heading);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--text-h);
+  padding: 8px 12px 20px;
+}
+
+.sidebar-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-link:hover {
+  background: var(--bg-elevated);
+  color: var(--text-h);
+}
+
+.sidebar-link.active {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-h);
+}
+
+.sidebar-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sidebar-logout {
+  margin-top: auto;
+  align-self: stretch;
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  padding: 0 24px;
+  text-align: center;
+}
+
+/* ---- Home module list ---- */
+
+.module-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.module-card:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-elevated);
+}
+
+.module-card strong {
+  color: var(--text-h);
+}
+
+.module-card p {
+  margin-top: 4px;
+}
+
 h1,
 h2,
 h3 {
