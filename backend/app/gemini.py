@@ -127,25 +127,59 @@ def generate_revision_guide(document_text: str) -> str:
     return _call_gemini(prompt)
 
 
-def ask_assistant(message: str, topic: str | None = None) -> str:
-    """
-    Sends a student's message to Gemini as a study-help assistant and
-    returns its reply. If `topic` is given (the student's current topic,
-    from session context), the assistant is told to focus help on it.
-    Raises RuntimeError on any API or parsing failure.
-    """
-    system_instruction = (
-        "You are a helpful, concise study assistant embedded in the MindPace "
-        "app. Keep replies short and focused on helping the student learn — "
-        "no padding or filler."
-    )
-    if topic:
-        system_instruction += (
-            f' The student is currently studying "{topic}"; tailor your help '
-            "to that topic when relevant."
-        )
+ZEN_SYSTEM_INSTRUCTION = (
+    "You are Zen, a study companion embedded in the MindPace app. Your "
+    "voice is calm but dryly sarcastic — you occasionally tease the "
+    "student about overconfidence or rushing, but never cruelly. Every "
+    "reply must nudge them toward one genuinely relaxing or reflective "
+    "action: a breathing pause, a reframe of a mistake, or a small, "
+    "specific win to focus on next. Keep replies to 2-3 sentences, "
+    "maximum — no padding, no filler, no bullet lists."
+)
 
-    prompt = f"{system_instruction}\n\nStudent: {message}\nAssistant:"
+
+def _describe_signals(signals: dict) -> str:
+    """
+    Turns the raw behavioral-signal numbers into a short line Zen can
+    read and react to in-character, rather than handing the model bare
+    numbers with no framing.
+    """
+    parts = []
+    if signals.get("avg_confidence") is not None:
+        parts.append(f"average stated confidence {signals['avg_confidence']:.2f}")
+    if signals.get("accuracy") is not None:
+        parts.append(f"accuracy {signals['accuracy']:.0%}")
+    if signals.get("avg_response_time_ms") is not None:
+        parts.append(f"average response time {signals['avg_response_time_ms'] / 1000:.1f}s")
+    if signals.get("recent_pattern"):
+        pattern = "".join("Y" if correct else "N" for correct in signals["recent_pattern"])
+        parts.append(f"recent correct/incorrect pattern (oldest to newest): {pattern}")
+    return "; ".join(parts)
+
+
+def ask_assistant(message: str, topic: str | None = None, signals: dict | None = None) -> str:
+    """
+    Sends a student's message to Gemini as Zen, MindPace's study
+    companion, and returns its reply. `topic` (the student's current
+    topic) and `signals` (recent confidence/accuracy/response-time
+    behavior from their current session) are folded into the prompt as
+    context Zen can riff on — neither is required. Raises RuntimeError
+    on any API or parsing failure.
+    """
+    system_instruction = ZEN_SYSTEM_INSTRUCTION
+    if topic:
+        system_instruction += f' The student is currently studying "{topic}".'
+    if signals:
+        signal_summary = _describe_signals(signals)
+        if signal_summary:
+            system_instruction += (
+                f" Their behavioral signals from this session: {signal_summary}. "
+                "Let this inform your tone (e.g. tease gently if they're "
+                "answering fast and wrong, or overconfident and missing) "
+                "without reciting the raw numbers back at them."
+            )
+
+    prompt = f"{system_instruction}\n\nStudent: {message}\nZen:"
     return _call_gemini(prompt).strip()
 
 

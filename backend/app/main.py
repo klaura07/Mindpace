@@ -763,11 +763,14 @@ def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
         )
 
     topic = None
+    signals = None
     if request.session_id is not None:
         conn = get_connection()
         # Best-effort context: the topic of the most recent question answered
-        # in this session, if any. A missing/unknown session just means no
-        # topic context, not an error — this endpoint doesn't write anything.
+        # in this session, if any, plus recent behavioral signals (confidence,
+        # correctness, response time) to give Zen something to react to. A
+        # missing/unknown session just means no context, not an error — this
+        # endpoint doesn't write anything.
         row = conn.execute(
             """SELECT q.topic FROM responses r
                JOIN questions q ON q.question_id = r.question_id
@@ -775,11 +778,30 @@ def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
                ORDER BY r.response_id DESC LIMIT 1""",
             (request.session_id,),
         ).fetchone()
-        conn.close()
         topic = row["topic"] if row else None
 
+        recent = conn.execute(
+            """SELECT confidence, is_correct, response_time_ms FROM responses
+               WHERE session_id = ? ORDER BY response_id DESC LIMIT 5""",
+            (request.session_id,),
+        ).fetchall()
+        conn.close()
+
+        if recent:
+            confidences = [r["confidence"] for r in recent]
+            response_times = [r["response_time_ms"] for r in recent if r["response_time_ms"] is not None]
+            signals = {
+                "avg_confidence": sum(confidences) / len(confidences),
+                "accuracy": sum(r["is_correct"] for r in recent) / len(recent),
+                "avg_response_time_ms": (
+                    sum(response_times) / len(response_times) if response_times else None
+                ),
+                # Oldest to newest, matching the order Zen should narrate it in.
+                "recent_pattern": [bool(r["is_correct"]) for r in reversed(recent)],
+            }
+
     try:
-        reply = ask_assistant(request.message, topic=topic)
+        reply = ask_assistant(request.message, topic=topic, signals=signals)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

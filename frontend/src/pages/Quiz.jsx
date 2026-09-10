@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createSession, getQuestions, createResponse, createJournalEntry } from "../api";
-import AssistantWidget from "../components/AssistantWidget";
+import { useAssistantSession } from "../context/AssistantSessionContext";
 
 const QUESTIONS_PER_QUIZ = 5;
 
@@ -9,6 +9,7 @@ export default function Quiz() {
   const [userId, setUserId] = useState(null);
   const [topic, setTopic] = useState("");
   const [sessionId, setSessionId] = useState(null);
+  const { setSessionId: setAssistantSessionId } = useAssistantSession();
   const [questions, setQuestions] = useState(null);
   const [index, setIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState("");
@@ -55,6 +56,7 @@ export default function Quiz() {
       }
       const session = await createSession(Number(userId));
       setSessionId(session.session_id);
+      setAssistantSessionId(session.session_id);
       setQuestions(fetched.slice(0, QUESTIONS_PER_QUIZ));
       setIndex(0);
     } catch (err) {
@@ -140,7 +142,6 @@ export default function Quiz() {
           </button>
         </form>
         {error && <p role="alert">{error}</p>}
-        <AssistantWidget />
       </div>
     );
   }
@@ -179,7 +180,6 @@ export default function Quiz() {
 
         {error && <p role="alert">{error}</p>}
         <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
-        <AssistantWidget sessionId={sessionId} />
       </div>
     );
   }
@@ -254,7 +254,6 @@ export default function Quiz() {
       )}
 
       {error && <p role="alert">{error}</p>}
-      <AssistantWidget sessionId={sessionId} />
     </div>
   );
 }

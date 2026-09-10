@@ -7,7 +7,6 @@ import {
   getCalibrationTrend,
   getLearningState,
 } from "../api";
-import AssistantWidget from "../components/AssistantWidget";
 
 export default function Dashboard() {
   const [userId, setUserId] = useState(null);
@@ -200,8 +199,6 @@ export default function Dashboard() {
         )}
         {learningStateError && <p role="alert">{learningStateError}</p>}
       </section>
-
-      <AssistantWidget />
     </div>
   );
 }
