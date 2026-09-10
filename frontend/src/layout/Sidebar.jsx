@@ -1,12 +1,22 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import {
+  DashboardIcon,
+  HomeIcon,
+  LoginIcon,
+  QuizIcon,
+  ReviewIcon,
+  UnwindIcon,
+  UploadIcon,
+} from "../components/icons";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Home", icon: "🏠", end: true },
-  { to: "/dashboard", label: "Dashboard", icon: "📊" },
-  { to: "/upload", label: "Upload", icon: "📄" },
-  { to: "/quiz", label: "Quiz", icon: "❓" },
-  { to: "/review", label: "Review", icon: "🔁" },
-  { to: "/login", label: "Login / Signup", icon: "👤" },
+  { to: "/", label: "Home", Icon: HomeIcon, end: true },
+  { to: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+  { to: "/upload", label: "Upload", Icon: UploadIcon },
+  { to: "/quiz", label: "Quiz", Icon: QuizIcon },
+  { to: "/review", label: "Review", Icon: ReviewIcon },
+  { to: "/unwind", label: "Unwind", Icon: UnwindIcon },
+  { to: "/login", label: "Login / Signup", Icon: LoginIcon },
 ];
 
 export default function Sidebar() {
@@ -29,9 +39,7 @@ export default function Sidebar() {
               end={item.end}
               className={({ isActive }) => "sidebar-link" + (isActive ? " active" : "")}
             >
-              <span className="sidebar-icon" aria-hidden="true">
-                {item.icon}
-              </span>
+              <item.Icon className="sidebar-nav-icon" aria-hidden="true" />
               <span className="sidebar-label">{item.label}</span>
             </NavLink>
           </li>

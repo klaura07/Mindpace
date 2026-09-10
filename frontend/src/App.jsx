@@ -6,6 +6,7 @@ import Upload from "./pages/Upload";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
 import Review from "./pages/Review";
+import Unwind from "./pages/Unwind";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/quiz" element={<Quiz />} />
         <Route path="/review" element={<Review />} />
+        <Route path="/unwind" element={<Unwind />} />
       </Route>
     </Routes>
   );
