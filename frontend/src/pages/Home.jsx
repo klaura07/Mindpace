@@ -31,6 +31,12 @@ const MODULES = [
     title: "Dashboard",
     description: "Track your calibration score, trends, and overall learning state.",
   },
+  {
+    to: "/unwind",
+    icon: "🍃",
+    title: "Unwind",
+    description: "A quiet corner to let your mind settle between quizzes.",
+  },
 ];
 
 export default function Home() {
