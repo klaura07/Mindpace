@@ -6,8 +6,9 @@ const NAV_ITEMS = [
   { to: "/upload", label: "Upload", icon: "📄" },
   { to: "/quiz", label: "Quiz", icon: "❓" },
   { to: "/review", label: "Review", icon: "🔁" },
-  { to: "/dashboard", label: "Dashboard", icon: "📊" },
 ];
+
+const DASHBOARD_ITEM = { to: "/dashboard", label: "Dashboard", icon: "📊" };
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -36,6 +37,19 @@ export default function Sidebar() {
             </NavLink>
           </li>
         ))}
+      </ul>
+      <ul className="sidebar-nav sidebar-nav-bottom">
+        <li>
+          <NavLink
+            to={DASHBOARD_ITEM.to}
+            className={({ isActive }) => "sidebar-link" + (isActive ? " active" : "")}
+          >
+            <span className="sidebar-icon" aria-hidden="true">
+              {DASHBOARD_ITEM.icon}
+            </span>
+            <span className="sidebar-label">{DASHBOARD_ITEM.label}</span>
+          </NavLink>
+        </li>
       </ul>
       {loggedIn && (
         <button className="sidebar-logout" onClick={handleLogout}>
