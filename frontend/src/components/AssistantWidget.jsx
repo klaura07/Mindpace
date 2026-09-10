@@ -52,17 +52,17 @@ export default function AssistantWidget({ sessionId }) {
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <strong>Study Assistant</strong>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close assistant">
+            <strong>Zen</strong>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close Zen">
               ×
             </button>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 12, textAlign: "left" }}>
-            {messages.length === 0 && <p>Ask me anything about what you're studying.</p>}
+            {messages.length === 0 && <p>Say something. Zen's listening.</p>}
             {messages.map((m, i) => (
               <p key={i}>
-                <strong>{m.role === "user" ? "You" : "Assistant"}:</strong> {m.text}
+                <strong>{m.role === "user" ? "You" : "Zen"}:</strong> {m.text}
               </p>
             ))}
             {error && <p role="alert">{error}</p>}
@@ -86,7 +86,7 @@ export default function AssistantWidget({ sessionId }) {
         </div>
       ) : (
         <button type="button" onClick={() => setOpen(true)}>
-          💬 Ask
+          🧘 Zen
         </button>
       )}
     </div>
