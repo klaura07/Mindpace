@@ -166,6 +166,36 @@ def classify_theme(entry_text: str) -> str:
     return _call_gemini(prompt).strip()
 
 
+def generate_question_variant(question: dict) -> dict:
+    """
+    Given an existing question, asks Gemini for ONE new question testing
+    the same underlying concept — different wording, scenario, and answer
+    options — for spaced review. This is the "desirable difficulty"
+    rephrasing referenced by questions.parent_question_id: reviewing a
+    fresh variant instead of the memorized original.
+    """
+    options_text = ", ".join(question.get("options") or [])
+    prompt = (
+        "Here is an existing multiple-choice question:\n\n"
+        f"Question: {question['prompt_text']}\n"
+        f"Options: {options_text}\n"
+        f"Correct answer: {question.get('correct_answer')}\n\n"
+        "Write ONE new multiple-choice question that tests the exact same "
+        "underlying concept, but with different wording, a different "
+        "scenario or example, and different answer option text (do not "
+        "reuse the original options verbatim). It must have exactly 4 "
+        "options, one correct_answer that exactly matches one of those "
+        "options, and the same difficulty rating "
+        f"({question.get('difficulty', 1)})."
+    )
+    text = _call_gemini(prompt, response_schema=QUESTION_RESPONSE_SCHEMA)
+    try:
+        variants = json.loads(text)
+        return variants[0]
+    except (json.JSONDecodeError, IndexError, KeyError) as e:
+        raise RuntimeError(f"Unexpected Gemini response shape: {text}") from e
+
+
 def generate_mcqs_from_document(document_text: str, count: int = 5) -> list[dict]:
     """
     Asks Gemini for `count` multiple-choice questions grounded specifically

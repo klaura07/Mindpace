@@ -20,6 +20,7 @@ from app.gemini import (
     classify_theme,
     generate_mcqs,
     generate_mcqs_from_document,
+    generate_question_variant,
     generate_revision_guide,
 )
 from app.learning_state import classify_learning_state
@@ -218,6 +219,55 @@ def list_questions(topic: str | None = None):
     return [_row_to_question(row) for row in rows]
 
 
+@app.post("/questions/{question_id}/reframe", response_model=QuestionOut, status_code=201)
+def reframe_question(question_id: int):
+    """
+    Generates and persists a fresh variant of an existing question via
+    Gemini — same underlying concept, different wording/options — linked
+    back to the original via parent_question_id. Used by the Review
+    page's "Review now" action so a due question isn't just repeated
+    verbatim.
+    """
+    conn = get_connection()
+    try:
+        original = conn.execute(
+            "SELECT * FROM questions WHERE question_id = ?", (question_id,)
+        ).fetchone()
+        if original is None:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        original_dict = _row_to_question(original)
+        try:
+            variant = generate_question_variant(original_dict)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+        cursor = conn.execute(
+            """INSERT INTO questions
+               (topic, prompt_text, question_type, options, correct_answer,
+                difficulty, parent_question_id)
+               VALUES (?, ?, 'mcq', ?, ?, ?, ?)""",
+            (
+                original_dict["topic"],
+                variant["prompt_text"],
+                json.dumps(variant["options"]),
+                variant["correct_answer"],
+                variant["difficulty"],
+                question_id,
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM questions WHERE question_id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return _row_to_question(row)
+    except (sqlite3.IntegrityError, KeyError) as e:
+        conn.rollback()
+        raise HTTPException(status_code=502, detail=f"Malformed variant from Gemini: {e}")
+    finally:
+        conn.close()
+
+
 # Review scheduling constants. Kept deliberately simple (fixed short
 # interval on a miss, doubling on repeated hits) rather than a full
 # SM-2 implementation — this is a "few days out, push further on
@@ -288,7 +338,7 @@ def create_response(response: ResponseCreate):
     conn = get_connection()
     try:
         question = conn.execute(
-            "SELECT correct_answer FROM questions WHERE question_id = ?",
+            "SELECT correct_answer, parent_question_id FROM questions WHERE question_id = ?",
             (response.question_id,),
         ).fetchone()
         if question is None:
@@ -321,7 +371,11 @@ def create_response(response: ResponseCreate):
                 response.response_time_ms,
             ),
         )
-        _schedule_review(conn, session["user_id"], response.question_id, bool(is_correct))
+        # If this response was to a reframed variant (parent_question_id
+        # set), the review schedule tracks the original question — that's
+        # what the due list and future reframes key off of.
+        review_question_id = question["parent_question_id"] or response.question_id
+        _schedule_review(conn, session["user_id"], review_question_id, bool(is_correct))
         conn.commit()
         row = conn.execute(
             "SELECT * FROM responses WHERE response_id = ?", (cursor.lastrowid,)
