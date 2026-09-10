@@ -117,11 +117,8 @@ body {
   line-height: 1;
 }
 
-.sidebar-nav-bottom {
-  margin-top: auto;
-}
-
 .sidebar-logout {
+  margin-top: auto;
   align-self: stretch;
 }
 
