@@ -114,3 +114,7 @@ export function getLearningState(userId) {
 export function getDueReviewItems(userId) {
   return request(`/review/${userId}`);
 }
+
+export function reframeQuestion(questionId) {
+  return request(`/questions/${questionId}/reframe`, { method: "POST" });
+}
