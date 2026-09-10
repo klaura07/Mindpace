@@ -37,20 +37,22 @@ export default function Login() {
   return (
     <div className="fade-in">
       <h1>MindPace</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Logging in..." : "Continue"}
-        </button>
-      </form>
-      {error && <p role="alert">{error}</p>}
+      <section>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <button type="submit" disabled={submitting}>
+            {submitting ? "Logging in..." : "Continue"}
+          </button>
+        </form>
+        {error && <p role="alert">{error}</p>}
+      </section>
     </div>
   );
 }
