@@ -1,30 +1,35 @@
 :root {
-  /* Calm, focused dark-muted palette — the app's one designed look. */
-  --text: #a3a0ad;
-  --text-h: #e7e4ee;
-  --bg: #14151a;
-  --bg-elevated: #1b1c22;
-  --border: #2b2c34;
-  --code-bg: #1e1f27;
-  --accent: #7c9885;
-  --accent-bg: rgba(124, 152, 133, 0.12);
-  --accent-border: rgba(124, 152, 133, 0.45);
-  --accent-glow: rgba(124, 152, 133, 0.35);
-  --gold: #d9b36c;
-  --gold-bg: rgba(217, 179, 108, 0.12);
-  --gold-border: rgba(217, 179, 108, 0.45);
-  --gold-glow: rgba(217, 179, 108, 0.35);
-  --social-bg: rgba(30, 31, 39, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  /* Calm, cream-and-sage palette — the app's one designed look. */
+  --text: #5c5644;
+  --text-h: #24211a;
+  --bg: #f3ecdc;
+  --bg-elevated: #faf6ea;
+  --border: #ddd0ac;
+  --code-bg: #ece0c2;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* Sage green accent system — three cohesive shades, used in place of
+     the previous amber/gold: --accent as the primary interactive color,
+     --accent-deep as the darker second shade (streak/emphasis states). */
+  --accent: #87a96b;
+  --accent-deep: #5e7f49;
+  --accent-bg: rgba(135, 169, 107, 0.16);
+  --accent-border: rgba(135, 169, 107, 0.55);
+  --accent-glow: rgba(135, 169, 107, 0.45);
+  --gold: #5e7f49;
+  --gold-bg: rgba(94, 127, 73, 0.16);
+  --gold-border: rgba(94, 127, 73, 0.55);
+  --gold-glow: rgba(94, 127, 73, 0.45);
+  --social-bg: rgba(243, 236, 220, 0.6);
+  --shadow:
+    rgba(76, 68, 48, 0.14) 0 10px 15px -3px, rgba(76, 68, 48, 0.1) 0 4px 6px -2px;
+
+  --sans: 'Tenor Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Tenor Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -319,7 +324,7 @@ th {
 }
 
 [role="alert"] {
-  color: #e08a7d;
+  color: #b8503f;
 }
 
 /* ---- Motion & gamification utilities ---- */
@@ -397,5 +402,31 @@ th {
   button {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ---- Cursor trailing glow ---- */
+
+.cursor-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 200px;
+  margin: -100px 0 0 -100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+  filter: blur(20px);
+  mix-blend-mode: multiply;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2000;
+  transition: opacity 0.25s ease, width 0.3s ease, height 0.3s ease, margin 0.3s ease;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce), (pointer: coarse) {
+  .cursor-glow {
+    display: none;
   }
 }

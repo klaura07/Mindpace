@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import AssistantWidget from "../components/AssistantWidget";
+import CursorGlow from "../components/CursorGlow";
 import { AssistantSessionProvider, useAssistantSession } from "../context/AssistantSessionContext";
 
 // Zen is only offered on the pages where it makes sense to interrupt with a
@@ -23,6 +24,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
         <LayoutAssistant />
+        <CursorGlow />
       </div>
     </AssistantSessionProvider>
   );
