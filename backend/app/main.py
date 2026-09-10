@@ -38,6 +38,7 @@ from app.models import (
     QuestionOut,
     ResponseCreate,
     ResponseOut,
+    ReviewItemOut,
     SessionCreate,
     SessionOut,
     UserCreate,
@@ -217,6 +218,71 @@ def list_questions(topic: str | None = None):
     return [_row_to_question(row) for row in rows]
 
 
+# Review scheduling constants. Kept deliberately simple (fixed short
+# interval on a miss, doubling on repeated hits) rather than a full
+# SM-2 implementation — this is a "few days out, push further on
+# success" scheduler as specced, not a full spaced-repetition engine.
+REVIEW_MISS_INTERVAL_DAYS = 2
+REVIEW_MASTERED_INTERVAL_DAYS = 30
+
+
+def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, is_correct: bool) -> None:
+    """
+    Upserts the (user, question) row in review_items based on the latest
+    response. A miss schedules a re-review a few days out; a hit doubles
+    the interval (pushing the next review further away), and once the
+    interval reaches REVIEW_MASTERED_INTERVAL_DAYS the row is dropped —
+    the question is no longer considered "due" at all.
+    """
+    existing = conn.execute(
+        "SELECT * FROM review_items WHERE user_id = ? AND question_id = ?",
+        (user_id, question_id),
+    ).fetchone()
+
+    if not is_correct:
+        if existing:
+            conn.execute(
+                """UPDATE review_items
+                   SET interval_days = ?,
+                       next_review_date = datetime('now', ?),
+                       updated_at = datetime('now')
+                   WHERE review_item_id = ?""",
+                (
+                    REVIEW_MISS_INTERVAL_DAYS,
+                    f"+{REVIEW_MISS_INTERVAL_DAYS} days",
+                    existing["review_item_id"],
+                ),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO review_items (user_id, question_id, interval_days, next_review_date)
+                   VALUES (?, ?, ?, datetime('now', ?))""",
+                (user_id, question_id, REVIEW_MISS_INTERVAL_DAYS, f"+{REVIEW_MISS_INTERVAL_DAYS} days"),
+            )
+        return
+
+    # Correct answer: only matters if this question was already flagged
+    # weak — a fresh correct answer to a question that was never missed
+    # has nothing to clear.
+    if not existing:
+        return
+
+    new_interval = min(existing["interval_days"] * 2, REVIEW_MASTERED_INTERVAL_DAYS)
+    if new_interval >= REVIEW_MASTERED_INTERVAL_DAYS:
+        conn.execute(
+            "DELETE FROM review_items WHERE review_item_id = ?", (existing["review_item_id"],)
+        )
+    else:
+        conn.execute(
+            """UPDATE review_items
+               SET interval_days = ?,
+                   next_review_date = datetime('now', ?),
+                   updated_at = datetime('now')
+               WHERE review_item_id = ?""",
+            (new_interval, f"+{new_interval} days", existing["review_item_id"]),
+        )
+
+
 @app.post("/responses", response_model=ResponseOut, status_code=201)
 def create_response(response: ResponseCreate):
     conn = get_connection()
@@ -227,6 +293,12 @@ def create_response(response: ResponseCreate):
         ).fetchone()
         if question is None:
             raise HTTPException(status_code=404, detail="Question not found")
+
+        session = conn.execute(
+            "SELECT user_id FROM sessions WHERE session_id = ?", (response.session_id,)
+        ).fetchone()
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
 
         is_correct = int(
             question["correct_answer"] is not None
@@ -249,6 +321,7 @@ def create_response(response: ResponseCreate):
                 response.response_time_ms,
             ),
         )
+        _schedule_review(conn, session["user_id"], response.question_id, bool(is_correct))
         conn.commit()
         row = conn.execute(
             "SELECT * FROM responses WHERE response_id = ?", (cursor.lastrowid,)
@@ -526,6 +599,48 @@ def get_learning_state(user_id: int):
             {"topic": topic, "counts": topic_counts}
             for topic, topic_counts in counts_by_topic.items()
         ]
+    finally:
+        conn.close()
+
+
+@app.get("/review/{user_id}", response_model=list[ReviewItemOut])
+def get_due_review_items(user_id: int):
+    """
+    Questions due for review right now (next_review_date <= now),
+    prioritized so the user's weakest topics — lowest accuracy so far —
+    surface first, then earliest-due within a topic.
+    """
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        due_rows = conn.execute(
+            """SELECT ri.next_review_date, q.question_id, q.topic, q.prompt_text,
+                      q.question_type, q.options, q.correct_answer, q.difficulty
+               FROM review_items ri
+               JOIN questions q ON q.question_id = ri.question_id
+               WHERE ri.user_id = ? AND ri.next_review_date <= datetime('now')""",
+            (user_id,),
+        ).fetchall()
+
+        accuracy_rows = conn.execute(
+            """SELECT q.topic, AVG(r.is_correct) AS accuracy
+               FROM responses r
+               JOIN sessions s ON s.session_id = r.session_id
+               JOIN questions q ON q.question_id = r.question_id
+               WHERE s.user_id = ?
+               GROUP BY q.topic""",
+            (user_id,),
+        ).fetchall()
+        accuracy_by_topic = {row["topic"]: row["accuracy"] for row in accuracy_rows}
+
+        due = [_row_to_question(row) for row in due_rows]
+        due.sort(key=lambda item: (accuracy_by_topic.get(item["topic"], 0.0), item["next_review_date"]))
+        return due
     finally:
         conn.close()
 

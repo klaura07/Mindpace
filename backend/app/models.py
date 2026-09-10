@@ -98,6 +98,17 @@ class DocumentGenerateResponse(BaseModel):
     questions: list[QuestionOut]
 
 
+class ReviewItemOut(BaseModel):
+    question_id: int
+    topic: str
+    prompt_text: str
+    question_type: str
+    options: list[str] | None
+    correct_answer: str | None
+    difficulty: int
+    next_review_date: str
+
+
 class LearningStateTopicCounts(BaseModel):
     topic: str
     counts: dict[str, int]
