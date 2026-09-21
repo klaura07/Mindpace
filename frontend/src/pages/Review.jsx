@@ -1,21 +1,25 @@
+import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   createResponse,
   createSession,
   getDueReviewItems,
   getLearningState,
   reframeQuestion,
+  endSession,
 } from "../api";
 import EmptyState from "../components/EmptyState";
+import PlatformPage from "../components/PlatformPage";
+import ConfidenceBar from "../components/ConfidenceBar";
+import useActiveTime from "../study/useActiveTime";
+import "./Study.css";
 
-// Labels from classify_learning_state (backend) that indicate an incorrect
-// response. There's no dedicated "review" system yet, so we reuse the
-// existing learning-state breakdown and filter it down to the weak spots.
-const WEAK_LABELS = new Set(["overconfident", "guessing", "struggling"]);
+// Shared adaptive signals include uncertain correct answers as review candidates.
+const WEAK_LABELS = new Set(["Check this concept", "Take another look", "Build the foundation", "Build confidence"]);
 
 export default function Review() {
-  const [userId, setUserId] = useState(null);
+  const { user } = useAuth();
+  const userId = user.user_id;
   const [learningState, setLearningState] = useState(null);
   const [error, setError] = useState(null);
 
@@ -35,17 +39,9 @@ export default function Review() {
   const [feedback, setFeedback] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [confidence, setConfidence] = useState(.5);
+  const getElapsed = useActiveTime(`${userId}-${sessionId}-${variant?.question_id}`, Boolean(variant) && !feedback && !submitting);
 
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const id = localStorage.getItem("user_id");
-    if (!id) {
-      navigate("/login");
-      return;
-    }
-    setUserId(id);
-  }, [navigate]);
 
   useEffect(() => {
     if (!userId) return;
@@ -64,27 +60,21 @@ export default function Review() {
   }, [userId]);
 
   async function startReview(item) {
+    if (variantLoading || submitting || activeItemId !== null) return;
     setActiveItemId(item.question_id);
     setSelectedAnswer("");
+    setConfidence(.5);
     setFeedback(null);
     setSubmitError(null);
     setVariant(null);
     setVariantError(null);
     setVariantLoading(true);
 
-    if (!sessionId) {
-      try {
-        const session = await createSession(Number(userId));
-        setSessionId(session.session_id);
-      } catch (err) {
-        setVariantError(err.message);
-        setVariantLoading(false);
-        return;
-      }
-    }
-
     try {
-      setVariant(await reframeQuestion(item.question_id));
+      const fresh = await reframeQuestion(item.question_id);
+      const session = await createSession(Number(userId));
+      setSessionId(session.session_id);
+      setVariant(fresh);
     } catch (err) {
       setVariantError(err.message);
     } finally {
@@ -94,7 +84,7 @@ export default function Review() {
 
   async function submitReview(e) {
     e.preventDefault();
-    if (!sessionId || !variant) return;
+    if (!sessionId || !variant || submitting || feedback || !selectedAnswer.trim()) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -102,8 +92,8 @@ export default function Review() {
         sessionId,
         questionId: variant.question_id,
         answerText: selectedAnswer,
-        confidence: 0.5,
-        responseTimeMs: null,
+        confidence,
+        responseTimeMs: getElapsed(),
       });
       setFeedback(response);
     } catch (err) {
@@ -113,11 +103,23 @@ export default function Review() {
     }
   }
 
-  function finishReview(questionId) {
+  async function finishReview(questionId) {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await endSession(sessionId);
+    } catch (err) {
+      setSubmitError(err.message);
+      setSubmitting(false);
+      return;
+    }
     setDueItems((prev) => (prev ?? []).filter((item) => item.question_id !== questionId));
+    setSessionId(null);
     setActiveItemId(null);
     setVariant(null);
     setFeedback(null);
+    setSubmitting(false);
+    getLearningState(userId).then(setLearningState).catch((err) => setError(err.message));
   }
 
   if (!userId) return null;
@@ -130,9 +132,8 @@ export default function Review() {
     .filter(({ weakCounts }) => weakCounts.length > 0);
 
   return (
-    <div className="fade-in">
-      <h1>Review</h1>
-      <p>Past mistakes and weak areas, grouped by topic.</p>
+    <PlatformPage title="Review" eyebrow="Build on what you know"
+      description="Past mistakes and weak areas, grouped by topic.">
 
       <section>
         <h2>Due for review</h2>
@@ -140,24 +141,24 @@ export default function Review() {
         {dueItems && dueItems.length === 0 && (
           <EmptyState
             title="All caught up"
-            message="Nothing due for review right now — check back after your next quiz."
+            message="Nothing due for review right now — check back after your next study session."
           />
         )}
         {dueItems && dueItems.length > 0 && (
-          <ul>
+          <ul className="platform-list">
             {dueItems.map((item) => (
               <li key={item.question_id}>
                 <p>
                   <strong>{item.topic}</strong> — {item.prompt_text}
                 </p>
-                {activeItemId !== item.question_id && (
+                {activeItemId === null && (
                   <button onClick={() => startReview(item)}>Review now</button>
                 )}
 
                 {activeItemId === item.question_id && (
                   <div className="fade-in">
                     {variantLoading && <p>Generating a fresh variant of this question...</p>}
-                    {variantError && <p role="alert">{variantError}</p>}
+                    {variantError && <><p role="alert">{variantError}</p><button onClick={() => { setActiveItemId(null); setVariantError(null); }}>Back to due items</button></>}
 
                     {variant && !feedback && (
                       <>
@@ -191,6 +192,7 @@ export default function Review() {
                               />
                             </div>
                           )}
+                          <ConfidenceBar value={confidence} onChange={setConfidence} disabled={submitting} id={`confidence-${variant.question_id}`} />
                           <button type="submit" disabled={submitting || !selectedAnswer}>
                             {submitting ? "Submitting..." : "Submit"}
                           </button>
@@ -199,11 +201,13 @@ export default function Review() {
                     )}
 
                     {feedback && (
-                      <>
+                      <div className="platform-feedback">
                         <p>{feedback.is_correct ? "Correct!" : "Incorrect."}</p>
                         <p>Your answer: {feedback.answer_text}</p>
-                        <button onClick={() => finishReview(item.question_id)}>Done</button>
-                      </>
+                        <p>Answer: {feedback.correct_answer}</p>
+                        <p>{feedback.adaptation?.reason}</p>
+                        <button disabled={submitting} onClick={() => finishReview(item.question_id)}>Done</button>
+                      </div>
                     )}
 
                     {submitError && <p role="alert">{submitError}</p>}
@@ -220,14 +224,14 @@ export default function Review() {
       {learningState && weakByTopic.length === 0 && (
         <EmptyState
           title="No weak spots found"
-          message="Complete a quiz first and any topics you struggle with will show up here."
+          message="Complete a study session first and any topics you struggle with will show up here."
         />
       )}
 
       {weakByTopic.length > 0 && (
         <section>
           {weakByTopic.map(({ topic, weakCounts }) => (
-            <div key={topic}>
+            <div className="platform-topic" key={topic}>
               <h2>{topic}</h2>
               <table>
                 <thead>
@@ -249,6 +253,6 @@ export default function Review() {
           ))}
         </section>
       )}
-    </div>
+    </PlatformPage>
   );
 }

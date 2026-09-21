@@ -1,215 +1,87 @@
+﻿import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  computeCalibration,
-  generateQuestions,
-  getCalibration,
-  getCalibrationTrend,
-  getLearningState,
-} from "../api";
-import EmptyState from "../components/EmptyState";
-import LevelRing from "../components/LevelRing";
+import { Link } from "react-router-dom";
+import { getStudyAnalytics, uploadDocument } from "../api";
+import "./Dashboard.css";
+import "./Study.css";
+
+const percent = (value) => value === null ? "—" : `${Math.round(value * 100)}%`;
+const pace = (value) => value === null ? "—" : `${(value / 1000).toFixed(1)}s`;
 
 export default function Dashboard() {
-  const [userId, setUserId] = useState(null);
-  const [calibration, setCalibration] = useState(null);
-  const [calibrationError, setCalibrationError] = useState(null);
-  const [calibrationTrend, setCalibrationTrend] = useState(null);
-  const [topic, setTopic] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState(null);
-  const [generatedCount, setGeneratedCount] = useState(null);
-  const [learningState, setLearningState] = useState(null);
-  const [learningStateError, setLearningStateError] = useState(null);
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [analytics, setAnalytics] = useState(null);
+  const [error, setError] = useState(null);
+  const [docFile, setDocFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadedDocument, setUploadedDocument] = useState(null);
 
   useEffect(() => {
-    const id = localStorage.getItem("user_id");
-    if (!id) {
-      navigate("/login");
-      return;
-    }
-    setUserId(id);
-  }, [navigate]);
+    let cancelled = false;
+    getStudyAnalytics(user.user_id).then((data) => { if (!cancelled) setAnalytics(data); })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [user.user_id]);
 
-  useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      try {
-        await computeCalibration(userId);
-      } catch (err) {
-        if (err.status !== 400) {
-          setCalibrationError(err.message);
-          return;
-        }
-        // No responses yet to compute from — fall through and try to show
-        // whatever the most recent score is, if any.
-      }
-      try {
-        const score = await getCalibration(userId);
-        setCalibration(score);
-      } catch (err) {
-        setCalibrationError(
-          err.status === 404 ? "No calibration data yet — complete a quiz first." : err.message
-        );
-      }
-      try {
-        const trend = await getCalibrationTrend(userId);
-        setCalibrationTrend(trend);
-      } catch {
-        // Trend is a nice-to-have — the single-score display above already
-        // reports any real error, so fail quietly here.
-      }
-    })();
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      try {
-        setLearningState(await getLearningState(userId));
-      } catch (err) {
-        setLearningStateError(err.message);
-      }
-    })();
-  }, [userId]);
-
-  async function handleGenerate(e) {
+  async function handleUpload(e) {
     e.preventDefault();
-    if (!topic.trim()) return;
-    setGenerating(true);
-    setGenerateError(null);
-    setGeneratedCount(null);
+    if (!docFile || uploading) return;
+    const form = e.currentTarget;
+    setUploading(true);
+    setUploadError(null);
+    setUploadedDocument(null);
     try {
-      const created = await generateQuestions(topic.trim());
-      setGeneratedCount(created.length);
-    } catch (err) {
-      setGenerateError(err.message);
-    } finally {
-      setGenerating(false);
-    }
+      setUploadedDocument(await uploadDocument(user.user_id, docFile));
+      setDocFile(null);
+      form.reset();
+    } catch (err) { setUploadError(err.message); }
+    finally { setUploading(false); }
   }
 
-  if (!userId) return null;
-
-  // Light gamification: a "well-calibrated streak" (trailing trend points
-  // with a small gap, most recent first) and an XP/level readout derived
-  // from how many calibration checkpoints exist — both computed from data
-  // already on the page, no new backend calls.
-  let calibrationStreak = 0;
-  if (calibrationTrend) {
-    for (let i = calibrationTrend.length - 1; i >= 0; i--) {
-      if (Math.abs(calibrationTrend[i].calibration_gap) < 0.15) calibrationStreak++;
-      else break;
-    }
-  }
-  const xp = (calibrationTrend?.length ?? 0) * 10;
-  const level = Math.floor(xp / 30) + 1;
-
-  return (
-    <div className="fade-in">
-      <h1>Dashboard</h1>
-      <p>Logged in as user #{userId}</p>
-
-      <section>
-        <h2>Calibration</h2>
-        {calibration && (
-          <>
-            <p>
-              <strong className="glow-stat">{calibration.calibration_gap.toFixed(3)}</strong>
-            </p>
-            <p>Positive means overconfident, negative means underconfident.</p>
-          </>
-        )}
-        {calibrationError && <p role="alert">{calibrationError}</p>}
-
-        {calibrationTrend && calibrationTrend.length > 0 && (
-          <>
-            <div className="badge-row">
-              {calibrationStreak > 1 && (
-                <span className="badge badge-streak">
-                  🔥 {calibrationStreak} well-calibrated in a row
-                </span>
-              )}
-              <div className="level-badge">
-                <LevelRing level={level} progress={(xp % 30) / 30} />
-                <div className="level-text">
-                  <strong>Level {level}</strong>
-                  <span>{xp} XP</span>
-                </div>
-              </div>
-            </div>
-            <h3>Trend</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Computed at</th>
-                  <th>Gap</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calibrationTrend.map((point) => (
-                  <tr key={point.score_id}>
-                    <td>{point.computed_at}</td>
-                    <td>{point.calibration_gap.toFixed(3)}</td>
-                  </tr>
-                ))}
-              </tbody>
+  return <div className="dashboard">
+    <header className="dashboard-heading"><p className="dashboard-eyebrow">Your learning space</p>
+      <h1>Dashboard</h1><p>Your answers, confidence, and active response time guide your next practice.</p>
+    </header>
+    <section className="dashboard-upload">
+      <h2>Start with your material</h2><p>Upload a document to practice with questions and flashcards.</p>
+      <form className="dashboard-upload-form" onSubmit={handleUpload}>
+        <div className="dashboard-file-field"><label htmlFor="dashboard-file">Choose a document (PDF, DOCX, or TXT)</label>
+          <input id="dashboard-file" type="file" accept=".pdf,.docx,.txt" required disabled={uploading}
+            onChange={(e) => { setDocFile(e.target.files[0] ?? null); setUploadError(null); setUploadedDocument(null); }} />
+        </div>
+        <div className="dashboard-upload-actions">
+          <button className="btn-solid" disabled={uploading || !docFile}>{uploading ? "Uploading..." : "Upload document"}</button>
+          <Link to="/upload">View documents</Link><Link to="/study-time">Study time</Link>
+        </div>
+      </form>
+      {uploadedDocument && <p role="status">{uploadedDocument.filename} is ready. <Link to={`/study-time?document=${uploadedDocument.document_id}`}>Start studying</Link></p>}
+      {uploadError && <p role="alert">{uploadError}</p>}
+    </section>
+    {error && <p role="alert">{error}</p>}
+    {!analytics && !error && <p role="status">Loading learning analytics...</p>}
+    {analytics && <>
+      <p>Recent trends use up to 30 attempts per view, from the latest 200 attempts in each mode. Flashcard recall is self-reported and kept separate from scored answers.</p>
+      <div className="dashboard-progress">
+        {Object.entries(analytics).map(([mode, data]) => <section className="study-analytics" key={mode}>
+          <h2>{mode === "question" ? "Questions" : "Flashcards"}</h2>
+          {data.overall.attempts === 0 ? <p>No attempts yet. Begin in <Link to="/study-time">Study time</Link>.</p> : <>
+            <p>{data.overall.attempts} recent attempts · {mode === "question" ? "Accuracy" : "Reported recall"}: <strong>{percent(data.overall.accuracy)}</strong></p>
+            <p>Confidence: {percent(data.overall.confidence)} · Median active time: {pace(data.overall.median_response_ms)}</p>
+            <p>Confidence gap: {Math.round(data.overall.calibration_gap * 100)} percentage points. Positive means confidence is above results; negative means it is below.</p>
+            <table><thead><tr><th>Material</th><th>Attempts</th><th>{mode === "question" ? "Accuracy" : "Recall"}</th><th>Confidence</th><th>Active time</th></tr></thead>
+              <tbody>{data.topics.map((topic) => <tr key={`${topic.document_id}-${topic.topic}`}>
+                <td>{topic.document_id ? <Link to={`/study-time?document=${topic.document_id}`}>{topic.topic}</Link> : topic.topic}</td>
+                <td>{topic.attempts}</td><td>{percent(topic.accuracy)}</td><td>{percent(topic.confidence)}</td><td>{pace(topic.median_response_ms)}</td>
+              </tr>)}</tbody>
             </table>
-          </>
-        )}
-      </section>
-
-      <section>
-        <h2>Generate Questions</h2>
-        <form onSubmit={handleGenerate}>
-          <label htmlFor="gen-topic">Topic</label>
-          <input
-            id="gen-topic"
-            type="text"
-            required
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-          />
-          <button type="submit" disabled={generating}>
-            {generating ? "Generating..." : "Generate questions"}
-          </button>
-        </form>
-        {generatedCount !== null && <p>Generated {generatedCount} questions.</p>}
-        {generateError && <p role="alert">{generateError}</p>}
-      </section>
-
-      <section>
-        <h2>Learning State</h2>
-        {learningState && learningState.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Topic</th>
-                <th>Label</th>
-                <th>Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {learningState.flatMap(({ topic: t, counts }) =>
-                Object.entries(counts).map(([label, count]) => (
-                  <tr key={`${t}-${label}`}>
-                    <td>{t}</td>
-                    <td>{label}</td>
-                    <td>{count}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState
-            title="Nothing to show yet"
-            message="Complete a quiz first and your learning state will show up here."
-          />
-        )}
-        {learningStateError && <p role="alert">{learningStateError}</p>}
-      </section>
-    </div>
-  );
+            {data.topics.map((topic) => <div key={`${topic.document_id}-${topic.topic}-next`}>
+              <h3>{topic.topic}: {topic.state}</h3><p>{topic.reason}</p><p>{topic.pace}</p>
+            </div>)}
+          </>}
+        </section>)}
+      </div>
+      <p>Timing comparisons need five earlier attempts at the same difficulty and in the same mode. Longer answers alone do not imply distraction.</p>
+    </>}
+  </div>;
 }

@@ -8,6 +8,7 @@ wrote the schema by hand, there's no reason to hide it behind another
 abstraction layer this early.
 """
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "db" / "mindpace.db"
@@ -38,7 +39,19 @@ def init_db() -> None:
     Safe to call on every server startup — schema.sql uses
     CREATE TABLE IF NOT EXISTS, so this never wipes existing data.
     """
-    conn = get_connection()
-    with open(SCHEMA_PATH) as f:
-        conn.executescript(f.read())
-    conn.close()
+    with closing(get_connection()) as conn:
+        with open(SCHEMA_PATH) as f:
+            conn.executescript(f.read())
+        # Serialize additive migrations when multiple workers start together.
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            # Passwordless accounts stay locked, never claimed by email.
+            if "password_hash" not in {row["name"] for row in conn.execute("PRAGMA table_info(users)")}:
+                conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+            if "owner_user_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}:
+                conn.execute("ALTER TABLE questions ADD COLUMN owner_user_id INTEGER REFERENCES users(user_id)")
+            if "document_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}:
+                conn.execute("ALTER TABLE questions ADD COLUMN document_id INTEGER REFERENCES documents(document_id) ON DELETE SET NULL")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_questions_document ON questions(document_id)")
+            if "response_mode" not in {row["name"] for row in conn.execute("PRAGMA table_info(responses)")}:
+                conn.execute("ALTER TABLE responses ADD COLUMN response_mode TEXT NOT NULL DEFAULT 'question'")

@@ -1,0 +1,279 @@
+/* Shared platform styling, using the home page's existing palette and type. */
+.platform-page {
+  padding: 40px 8px 56px;
+  text-align: left;
+}
+
+.platform-page-heading {
+  max-width: 600px;
+  margin-bottom: 32px;
+}
+
+.platform-eyebrow {
+  color: var(--accent-deep);
+  font-size: 13px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.platform-page-heading h1 {
+  margin: 10px 0 16px;
+}
+
+.platform-page-heading > p:last-child {
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.platform-page section {
+  max-width: none;
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 28px;
+  border-radius: 22px;
+  box-sizing: border-box;
+}
+
+.platform-page section > h2 {
+  margin-bottom: 24px;
+}
+
+.platform-page p {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.platform-page section p {
+  font-size: 15px;
+}
+
+.platform-page form {
+  max-width: none;
+  margin: 20px 0 0;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.platform-page form label {
+  font-size: 14px;
+}
+
+.platform-page form input[type="text"] {
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 16px;
+}
+
+.platform-page form > div:has(> input[type="text"]) {
+  display: grid;
+  gap: 8px;
+}
+
+.platform-page button,
+.sidebar .sidebar-logout {
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+  color: var(--bg-elevated);
+  font-size: 15px;
+}
+
+.platform-page button:hover:not(:disabled),
+.sidebar .sidebar-logout:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.platform-page button + button {
+  margin-left: 0;
+}
+
+.platform-page form > button {
+  align-self: flex-start;
+}
+
+.platform-page .platform-secondary {
+  background: transparent;
+  color: var(--accent-deep);
+  border-color: var(--border);
+}
+
+.platform-page :is(button, input, a):focus-visible,
+.sidebar :is(button, a):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.platform-page fieldset {
+  gap: 12px;
+}
+
+.platform-page fieldset label {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.platform-page fieldset label:hover {
+  border-color: var(--accent);
+}
+
+.platform-page fieldset label:has(input:checked) {
+  border-color: var(--accent-deep);
+  background: var(--accent-bg);
+}
+
+.platform-page input[type="radio"] {
+  flex-shrink: 0;
+  accent-color: var(--accent-deep);
+  width: 16px;
+  height: 16px;
+}
+
+.platform-file-field {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px dashed var(--accent);
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.platform-file-field input {
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.platform-file-field input::file-selector-button {
+  padding: 10px 16px;
+  margin-right: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+}
+
+.platform-list {
+  display: grid;
+  gap: 20px;
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+}
+
+.platform-list > li {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}
+
+.platform-page p + button,
+.platform-feedback button {
+  margin-top: 16px;
+}
+
+.platform-page section > button {
+  margin-top: 20px;
+}
+
+.platform-page [role="alert"] {
+  margin-top: 16px;
+}
+
+.platform-page table {
+  table-layout: fixed;
+  overflow-wrap: anywhere;
+}
+
+.platform-page :is(th, td) {
+  padding: 12px 10px;
+}
+
+.platform-page th {
+  background: var(--accent-bg);
+}
+
+.platform-topic + .platform-topic {
+  margin-top: 28px;
+}
+
+.platform-feedback {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.platform-question-progress {
+  color: var(--accent-deep);
+  margin-bottom: 16px;
+}
+
+.platform-page > .empty-state {
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg-elevated);
+}
+
+.platform-page .unwind-canvas-wrap {
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.sidebar {
+  background: var(--bg-elevated);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-link {
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.sidebar-link:hover {
+  background: var(--bg);
+}
+
+@media (max-width: 700px) {
+  .platform-page {
+    padding: 28px 0 40px;
+  }
+
+  .platform-page section,
+  .platform-list > li {
+    padding: 20px;
+  }
+
+  .platform-file-field {
+    padding: 16px;
+  }
+
+  .platform-page button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

@@ -72,9 +72,15 @@ body {
 /* ---- Sidebar layout ---- */
 
 .app-shell {
+  --app-gutter: max(0px, calc((100vw - 1126px) / 2));
+  position: fixed;
+  inset: 0;
   display: flex;
-  flex: 1;
-  min-height: 100svh;
+  flex: none;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-left: var(--app-gutter);
   text-align: left;
 }
 
@@ -82,6 +88,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 220px;
+  height: 100%;
   flex-shrink: 0;
   padding: 20px 12px;
   border-right: 1px solid var(--border);
@@ -158,7 +165,11 @@ body {
 .app-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0 24px;
+  padding-right: calc(24px + var(--app-gutter));
   text-align: center;
 }
 
@@ -216,6 +227,7 @@ h3 {
 
 h1 {
   font-size: 56px;
+  line-height: 112%;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {
@@ -675,6 +687,430 @@ th {
   .cursor-glow {
     display: none;
   }
+}
+
+/* ---- Landing page (marketing "/" route, no sidebar) ---- */
+
+.landing-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-align: left;
+}
+
+.landing-content {
+  flex: 1;
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 48px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  @media (max-width: 900px) {
+    padding: 14px 20px;
+  }
+}
+
+.landing-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+.landing-logo-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--accent-deep);
+}
+
+.landing-nav-links {
+  display: flex;
+  gap: 28px;
+  @media (max-width: 700px) {
+    display: none;
+  }
+}
+
+.landing-nav-links a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+  transition: color 0.15s ease;
+}
+
+.landing-nav-links a:hover {
+  color: var(--accent-deep);
+}
+
+.landing-nav-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Pill buttons — the app's plain <button> stays for in-app actions; these
+   are for the landing page's <Link> anchors, which can't use <button>. */
+.btn-solid,
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.btn-solid {
+  background: var(--accent-deep);
+  color: var(--bg-elevated);
+  border: 1px solid var(--accent-deep);
+}
+
+.btn-solid:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  background: var(--bg-elevated);
+}
+
+.btn-lg {
+  padding: 14px 30px;
+  font-size: 16px;
+}
+
+.landing h2 {
+  font-size: 34px;
+  letter-spacing: -0.4px;
+  margin: 0 0 16px;
+  @media (max-width: 1024px) {
+    font-size: 26px;
+  }
+}
+
+/* Every landing block is a bare <section>, which the app-wide `section`
+   rule turns into a narrow, boxed card — reset that back to a full-width
+   band here so each block can span the page and carry its own background. */
+.landing section {
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 72px 48px;
+  background: var(--bg);
+  border: none;
+  @media (max-width: 900px) {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 48px 24px;
+  }
+}
+
+.hero-copy {
+  max-width: 480px;
+}
+
+.hero-copy h1 {
+  margin: 0 0 16px;
+}
+
+.hero-copy p {
+  margin: 0 0 28px;
+  color: var(--text);
+}
+
+.hero-art {
+  position: relative;
+  width: 360px;
+  height: 320px;
+  flex-shrink: 0;
+  @media (max-width: 900px) {
+    width: 100%;
+    height: 260px;
+  }
+}
+
+.hero-art-blob {
+  position: absolute;
+  inset: 0;
+  border-radius: 46% 54% 60% 40% / 50% 45% 55% 50%;
+  background: var(--accent-light);
+  opacity: 0.55;
+}
+
+.hero-art-steps {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 36px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.hero-art-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  padding: 10px 18px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.hero-art-steps li:nth-child(2) {
+  margin-left: 32px;
+}
+
+.hero-art-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+.hero-art-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.about {
+  padding: 56px 48px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  @media (max-width: 900px) {
+    padding: 40px 24px;
+  }
+}
+
+.about p {
+  max-width: 640px;
+  margin: 0 0 20px;
+  color: var(--text);
+}
+
+.features {
+  padding: 56px 48px 64px;
+  background: var(--bg);
+  border: none;
+  @media (max-width: 900px) {
+    padding: 40px 24px 48px;
+  }
+}
+
+.feature-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px;
+}
+
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 180px;
+}
+
+.feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+.feature-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.feature-card strong {
+  color: var(--text-h);
+  margin-bottom: 6px;
+}
+
+.feature-card p {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.landing-wave {
+  display: block;
+  width: 100%;
+  height: 70px;
+}
+
+.reviews {
+  padding: 64px 48px 88px;
+  background: var(--accent-deep);
+  color: var(--bg-elevated);
+  border: none;
+  @media (max-width: 900px) {
+    padding: 40px 24px 56px;
+  }
+}
+
+.reviews h2 {
+  color: var(--bg-elevated);
+}
+
+.testimonial-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.testimonial-card {
+  flex: 1 1 260px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.testimonial-card p {
+  margin: 0 0 18px;
+  color: var(--text-h);
+}
+
+.testimonial-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.testimonial-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
+.testimonial-person strong {
+  display: block;
+  color: var(--text-h);
+}
+
+.testimonial-role {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.landing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  padding: 48px 48px 24px;
+  background: var(--bg-elevated);
+  @media (max-width: 900px) {
+    padding: 40px 24px 24px;
+  }
+}
+
+.landing-footer-brand {
+  flex: 1 1 220px;
+}
+
+.landing-footer-brand p {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.landing-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 140px;
+}
+
+.landing-footer-col strong {
+  color: var(--text-h);
+}
+
+.landing-footer-col a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.landing-footer-col a:hover {
+  color: var(--accent-deep);
+}
+
+.landing-footer-bottom {
+  width: 100%;
+  padding-top: 24px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
 }
 
 /* ---- Unwind: falling-sand canvas ---- */

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { askAssistant } from "../api";
+import "./AssistantWidget.css";
 
 export default function AssistantWidget({ sessionId }) {
   const [open, setOpen] = useState(false);
@@ -7,6 +8,12 @@ export default function AssistantWidget({ sessionId }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const launcher = useRef(null);
+
+  function closeWidget() {
+    setOpen(false);
+    launcher.current?.focus();
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -27,18 +34,42 @@ export default function AssistantWidget({ sessionId }) {
   }
 
   return (
-    <div style={{ position: "fixed", bottom: 16, right: 16, zIndex: 1000 }}>
-      {open ? (
+    <div className="zen-widget">
+      <button
+        ref={launcher}
+        className="zen-launcher"
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-label={open ? "Close Zen assistant" : "Open Zen assistant"}
+        aria-expanded={open}
+        aria-controls="zen-panel"
+        title="Zen assistant"
+      >
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6"
+          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M16 24C8 18 11 11 16 6c5 5 8 12 0 18Z" />
+          <path d="M16 24C8 24 4 19 4 13c6 0 10 4 12 11Z" />
+          <path d="M16 24c8 0 12-5 12-11-6 0-10 4-12 11Z" />
+          <path d="M10 27h12" />
+        </svg>
+      </button>
+      {open && (
         <div
+          id="zen-panel"
+          role="region"
+          aria-label="Zen assistant"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") closeWidget();
+          }}
           className="fade-in"
           style={{
-            width: 320,
-            maxHeight: 420,
+            width: "min(320px, calc(100vw - 48px))",
+            maxHeight: "min(420px, calc(100dvh - 100px))",
             display: "flex",
             flexDirection: "column",
             background: "var(--bg-elevated)",
             border: "1px solid var(--border)",
-            borderRadius: 10,
+            borderRadius: 18,
             boxShadow: "var(--shadow)",
             overflow: "hidden",
           }}
@@ -53,7 +84,7 @@ export default function AssistantWidget({ sessionId }) {
             }}
           >
             <strong>Zen</strong>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close Zen">
+            <button type="button" onClick={closeWidget} aria-label="Close Zen">
               ×
             </button>
           </div>
@@ -84,10 +115,6 @@ export default function AssistantWidget({ sessionId }) {
             </button>
           </form>
         </div>
-      ) : (
-        <button type="button" onClick={() => setOpen(true)}>
-          🧘 Zen
-        </button>
       )}
     </div>
   );

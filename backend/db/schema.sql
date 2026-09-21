@@ -8,6 +8,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
     user_id     INTEGER PRIMARY KEY AUTOINCREMENT,
     email       TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -26,6 +27,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- this is what makes "dynamic rephrasing" (Bjork / desirable difficulty) queryable later.
 CREATE TABLE IF NOT EXISTS questions (
     question_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id       INTEGER REFERENCES users(user_id),
+    document_id         INTEGER REFERENCES documents(document_id) ON DELETE SET NULL,
     topic                TEXT NOT NULL,
     prompt_text          TEXT NOT NULL,
     reference_answer     TEXT,
@@ -49,6 +52,7 @@ CREATE TABLE IF NOT EXISTS responses (
     is_correct          INTEGER NOT NULL,        -- 0/1 (SQLite has no native boolean)
     confidence           REAL NOT NULL,           -- 0.0-1.0, from the confidence slider
     response_time_ms    INTEGER,
+    response_mode      TEXT NOT NULL DEFAULT 'question' CHECK (response_mode IN ('question', 'flashcard')),
     answered_at          TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(question_id) ON DELETE RESTRICT
@@ -137,3 +141,15 @@ CREATE INDEX IF NOT EXISTS idx_journal_session ON journal_entries(session_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_items_user ON review_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_items_due ON review_items(user_id, next_review_date);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    key_hash TEXT PRIMARY KEY,
+    hits INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);

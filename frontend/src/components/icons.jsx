@@ -78,3 +78,15 @@ export function LoginIcon(props) {
     </svg>
   );
 }
+
+// Brandmark used in the landing navbar/footer — a leaf-in-circle to echo
+// the same organic, hand-drawn feel as the rest of the icon set.
+export function LogoMark(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 20c-4.5 0-7.5-3.2-7.5-8.3C4.5 7.4 7.8 4 12 4s7.5 3.4 7.5 7.7C19.5 16.8 16.5 20 12 20Z" />
+      <path d="M12 20V9.5" />
+      <path d="M12 12.5c0-2.6 2-4 4.3-4.3" />
+    </svg>
+  );
+}

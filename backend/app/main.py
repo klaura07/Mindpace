@@ -9,9 +9,15 @@ clickable API tester out of nothing but this file.
 """
 import json
 import sqlite3
+from statistics import median
+from typing import Literal
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from app.auth import (ALLOWED_ORIGINS, current_user, require_auth, require_owner,
+                      require_question_access, require_session_owner, router as auth_router)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
@@ -21,9 +27,8 @@ from app.gemini import (
     generate_mcqs,
     generate_mcqs_from_document,
     generate_question_variant,
-    generate_revision_guide,
 )
-from app.learning_state import classify_learning_state
+from app.adaptive import choose_question, response_history, signals
 from app.rate_limit import RateLimiter
 from app.models import (
     AssistantRequest,
@@ -42,7 +47,6 @@ from app.models import (
     ReviewItemOut,
     SessionCreate,
     SessionOut,
-    UserCreate,
     UserOut,
 )
 from app.text_extraction import extract_text
@@ -56,13 +60,29 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MindPace API", lifespan=lifespan)
+app = FastAPI(title="MindPace API", lifespan=lifespan, dependencies=[Depends(require_auth)])
+app.include_router(auth_router)
+
+
+@app.middleware("http")
+async def prevent_private_caching(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    # Never echo submitted passwords in validation responses.
+    errors = [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-Mindpace-Request"],
 )
 
 
@@ -75,41 +95,9 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.post("/users", response_model=UserOut, status_code=201)
-def create_user(user: UserCreate):
-    conn = get_connection()
-    try:
-        cursor = conn.execute(
-            "INSERT INTO users (email) VALUES (?)", (user.email,)
-        )
-        conn.commit()
-        row = conn.execute(
-            "SELECT user_id, email, created_at FROM users WHERE user_id = ?",
-            (cursor.lastrowid,),
-        ).fetchone()
-        return dict(row)
-    except sqlite3.IntegrityError:
-        # UNIQUE constraint on email fired
-        raise HTTPException(status_code=409, detail="Email already registered")
-    finally:
-        conn.close()
-
-
-@app.get("/users", response_model=UserOut)
-def get_user_by_email(email: str):
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT user_id, email, created_at FROM users WHERE email = ?",
-        (email,),
-    ).fetchone()
-    conn.close()
-    if row is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return dict(row)
-
-
 @app.get("/users/{user_id}", response_model=UserOut)
-def get_user(user_id: int):
+def get_user(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     row = conn.execute(
         "SELECT user_id, email, created_at FROM users WHERE user_id = ?",
@@ -128,15 +116,18 @@ def _row_to_question(row) -> dict:
 
 
 @app.post("/questions", response_model=QuestionOut, status_code=201)
-def create_question(question: QuestionCreate):
+def create_question(question: QuestionCreate, user: dict = Depends(current_user)):
+    if question.parent_question_id is not None:
+        require_question_access(user, question.parent_question_id)
     conn = get_connection()
     try:
         cursor = conn.execute(
             """INSERT INTO questions
-               (topic, prompt_text, reference_answer, question_type,
+               (owner_user_id, topic, prompt_text, reference_answer, question_type,
                 options, correct_answer, difficulty, parent_question_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                user["user_id"],
                 question.topic,
                 question.prompt_text,
                 question.reference_answer,
@@ -159,7 +150,7 @@ def create_question(question: QuestionCreate):
 
 
 @app.post("/questions/generate", response_model=list[QuestionOut], status_code=201)
-def generate_questions(request: QuestionGenerateRequest):
+def generate_questions(request: QuestionGenerateRequest, user: dict = Depends(current_user)):
     try:
         generated = generate_mcqs(request.topic, request.count)
     except RuntimeError as e:
@@ -171,9 +162,10 @@ def generate_questions(request: QuestionGenerateRequest):
         for q in generated:
             cursor = conn.execute(
                 """INSERT INTO questions
-                   (topic, prompt_text, question_type, options, correct_answer, difficulty)
-                   VALUES (?, ?, 'mcq', ?, ?, ?)""",
+                   (owner_user_id, topic, prompt_text, question_type, options, correct_answer, difficulty)
+                   VALUES (?, ?, ?, 'mcq', ?, ?, ?)""",
                 (
+                    user["user_id"],
                     request.topic,
                     q["prompt_text"],
                     json.dumps(q["options"]),
@@ -195,7 +187,8 @@ def generate_questions(request: QuestionGenerateRequest):
 
 
 @app.get("/questions/{question_id}", response_model=QuestionOut)
-def get_question(question_id: int):
+def get_question(question_id: int, user: dict = Depends(current_user)):
+    require_question_access(user, question_id)
     conn = get_connection()
     row = conn.execute(
         "SELECT * FROM questions WHERE question_id = ?", (question_id,)
@@ -207,20 +200,20 @@ def get_question(question_id: int):
 
 
 @app.get("/questions", response_model=list[QuestionOut])
-def list_questions(topic: str | None = None):
+def list_questions(topic: str | None = None, user: dict = Depends(current_user)):
     conn = get_connection()
     if topic is not None:
         rows = conn.execute(
-            "SELECT * FROM questions WHERE topic = ? ORDER BY question_id", (topic,)
+            "SELECT * FROM questions WHERE topic = ? AND (owner_user_id IS NULL OR owner_user_id = ?) ORDER BY question_id", (topic, user["user_id"])
         ).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM questions ORDER BY question_id").fetchall()
+        rows = conn.execute("SELECT * FROM questions WHERE owner_user_id IS NULL OR owner_user_id = ? ORDER BY question_id", (user["user_id"],)).fetchall()
     conn.close()
     return [_row_to_question(row) for row in rows]
 
 
 @app.post("/questions/{question_id}/reframe", response_model=QuestionOut, status_code=201)
-def reframe_question(question_id: int):
+def reframe_question(question_id: int, user: dict = Depends(current_user)):
     """
     Generates and persists a fresh variant of an existing question via
     Gemini — same underlying concept, different wording/options — linked
@@ -228,6 +221,7 @@ def reframe_question(question_id: int):
     page's "Review now" action so a due question isn't just repeated
     verbatim.
     """
+    require_question_access(user, question_id)
     conn = get_connection()
     try:
         original = conn.execute(
@@ -244,10 +238,12 @@ def reframe_question(question_id: int):
 
         cursor = conn.execute(
             """INSERT INTO questions
-               (topic, prompt_text, question_type, options, correct_answer,
+               (owner_user_id, document_id, topic, prompt_text, question_type, options, correct_answer,
                 difficulty, parent_question_id)
-               VALUES (?, ?, 'mcq', ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?, ?)""",
             (
+                user["user_id"],
+                original_dict.get("document_id"),
                 original_dict["topic"],
                 variant["prompt_text"],
                 json.dumps(variant["options"]),
@@ -268,15 +264,13 @@ def reframe_question(question_id: int):
         conn.close()
 
 
-# Review scheduling constants. Kept deliberately simple (fixed short
-# interval on a miss, doubling on repeated hits) rather than a full
-# SM-2 implementation — this is a "few days out, push further on
-# success" scheduler as specced, not a full spaced-repetition engine.
-REVIEW_MISS_INTERVAL_DAYS = 2
+# Short review intervals for uncertainty or misses; confident successes expand them.
 REVIEW_MASTERED_INTERVAL_DAYS = 30
 
 
-def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, is_correct: bool) -> None:
+def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, is_correct: bool,
+                     confidence: float = 1, response_time_ms: int | None = None,
+                     typical_ms: float | None = None) -> None:
     """
     Upserts the (user, question) row in review_items based on the latest
     response. A miss schedules a re-review a few days out; a hit doubles
@@ -289,7 +283,10 @@ def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, i
         (user_id, question_id),
     ).fetchone()
 
-    if not is_correct:
+    needs_review = not is_correct or confidence < .7
+    interval = 1 if not is_correct and (confidence >= .7 or
+        (typical_ms is not None and response_time_ms is not None and response_time_ms < typical_ms * .5)) else 2
+    if needs_review:
         if existing:
             conn.execute(
                 """UPDATE review_items
@@ -298,8 +295,8 @@ def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, i
                        updated_at = datetime('now')
                    WHERE review_item_id = ?""",
                 (
-                    REVIEW_MISS_INTERVAL_DAYS,
-                    f"+{REVIEW_MISS_INTERVAL_DAYS} days",
+                    interval,
+                    f"+{interval} days",
                     existing["review_item_id"],
                 ),
             )
@@ -307,7 +304,7 @@ def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, i
             conn.execute(
                 """INSERT INTO review_items (user_id, question_id, interval_days, next_review_date)
                    VALUES (?, ?, ?, datetime('now', ?))""",
-                (user_id, question_id, REVIEW_MISS_INTERVAL_DAYS, f"+{REVIEW_MISS_INTERVAL_DAYS} days"),
+                (user_id, question_id, interval, f"+{interval} days"),
             )
         return
 
@@ -334,21 +331,39 @@ def _schedule_review(conn: sqlite3.Connection, user_id: int, question_id: int, i
 
 
 @app.post("/responses", response_model=ResponseOut, status_code=201)
-def create_response(response: ResponseCreate):
+def create_response(response: ResponseCreate, user: dict = Depends(current_user)):
+    require_session_owner(user, response.session_id)
+    require_question_access(user, response.question_id)
     conn = get_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         question = conn.execute(
-            "SELECT correct_answer, parent_question_id FROM questions WHERE question_id = ?",
+            "SELECT * FROM questions WHERE question_id = ?",
             (response.question_id,),
         ).fetchone()
         if question is None:
             raise HTTPException(status_code=404, detail="Question not found")
 
         session = conn.execute(
-            "SELECT user_id FROM sessions WHERE session_id = ?", (response.session_id,)
+            "SELECT user_id, end_time FROM sessions WHERE session_id = ?", (response.session_id,)
         ).fetchone()
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
+        if session["end_time"]:
+            raise HTTPException(status_code=409, detail="This study session has ended. Start another session.")
+        existing = conn.execute(
+            "SELECT * FROM responses WHERE session_id = ? AND question_id = ?",
+            (response.session_id, response.question_id),
+        ).fetchone()
+        if existing:
+            # Network retries must not create duplicate learning evidence.
+            if (existing["response_mode"] != response.response_mode or
+                    existing["answer_text"] != response.answer_text or
+                    existing["confidence"] != response.confidence or
+                    (response.response_mode == "flashcard" and existing["is_correct"] != int(response.recalled))):
+                raise HTTPException(status_code=409, detail="This question already has a saved answer in this session.")
+            return {**dict(existing), "correct_answer": question["correct_answer"],
+                    "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], existing["response_mode"]))}
 
         is_correct = int(
             question["correct_answer"] is not None
@@ -356,12 +371,18 @@ def create_response(response: ResponseCreate):
             and response.answer_text.strip().lower()
             == question["correct_answer"].strip().lower()
         )
+        if response.response_mode == "flashcard":
+            is_correct = int(response.recalled)
+        history = response_history(conn, user["user_id"], question["document_id"], response.response_mode)
+        timings = [r["response_time_ms"] for r in history
+                   if r["difficulty"] == question["difficulty"] and r["response_time_ms"]][:20]
+        typical_ms = median(timings) if len(timings) >= 5 else None
 
         cursor = conn.execute(
             """INSERT INTO responses
                (session_id, question_id, answer_text, is_correct,
-                confidence, response_time_ms)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+                confidence, response_time_ms, response_mode)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 response.session_id,
                 response.question_id,
@@ -369,18 +390,21 @@ def create_response(response: ResponseCreate):
                 is_correct,
                 response.confidence,
                 response.response_time_ms,
+                response.response_mode,
             ),
         )
         # If this response was to a reframed variant (parent_question_id
         # set), the review schedule tracks the original question — that's
         # what the due list and future reframes key off of.
         review_question_id = question["parent_question_id"] or response.question_id
-        _schedule_review(conn, session["user_id"], review_question_id, bool(is_correct))
+        _schedule_review(conn, session["user_id"], review_question_id, bool(is_correct),
+                         response.confidence, response.response_time_ms, typical_ms)
         conn.commit()
         row = conn.execute(
             "SELECT * FROM responses WHERE response_id = ?", (cursor.lastrowid,)
         ).fetchone()
-        return dict(row)
+        return {**dict(row), "correct_answer": question["correct_answer"],
+                "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], response.response_mode))}
     except sqlite3.IntegrityError as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
@@ -388,7 +412,7 @@ def create_response(response: ResponseCreate):
 
 
 @app.get("/responses/{response_id}", response_model=ResponseOut)
-def get_response(response_id: int):
+def get_response(response_id: int, user: dict = Depends(current_user)):
     conn = get_connection()
     row = conn.execute(
         "SELECT * FROM responses WHERE response_id = ?", (response_id,)
@@ -396,11 +420,13 @@ def get_response(response_id: int):
     conn.close()
     if row is None:
         raise HTTPException(status_code=404, detail="Response not found")
+    require_session_owner(user, row["session_id"])
     return dict(row)
 
 
 @app.post("/sessions", response_model=SessionOut, status_code=201)
-def create_session(session: SessionCreate):
+def create_session(session: SessionCreate, user: dict = Depends(current_user)):
+    require_owner(user, session.user_id)
     conn = get_connection()
     try:
         cursor = conn.execute(
@@ -418,7 +444,8 @@ def create_session(session: SessionCreate):
 
 
 @app.get("/sessions/{session_id}", response_model=SessionOut)
-def get_session(session_id: int):
+def get_session(session_id: int, user: dict = Depends(current_user)):
+    require_session_owner(user, session_id)
     conn = get_connection()
     row = conn.execute(
         "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
@@ -430,7 +457,8 @@ def get_session(session_id: int):
 
 
 @app.post("/sessions/{session_id}/end", response_model=SessionOut)
-def end_session(session_id: int):
+def end_session(session_id: int, user: dict = Depends(current_user)):
+    require_session_owner(user, session_id)
     conn = get_connection()
     try:
         cursor = conn.execute(
@@ -449,7 +477,8 @@ def end_session(session_id: int):
 
 
 @app.post("/calibration/{user_id}/compute", response_model=CalibrationScoreOut, status_code=201)
-def compute_calibration(user_id: int):
+def compute_calibration(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     try:
         user = conn.execute(
@@ -462,7 +491,7 @@ def compute_calibration(user_id: int):
             """SELECT AVG(r.confidence) AS avg_confidence, AVG(r.is_correct) AS accuracy
                FROM responses r
                JOIN sessions s ON s.session_id = r.session_id
-               WHERE s.user_id = ?""",
+               WHERE s.user_id = ? AND r.response_mode = 'question'""",
             (user_id,),
         ).fetchone()
 
@@ -487,7 +516,8 @@ def compute_calibration(user_id: int):
 
 
 @app.get("/calibration/{user_id}", response_model=CalibrationScoreOut)
-def get_latest_calibration(user_id: int):
+def get_latest_calibration(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     row = conn.execute(
         """SELECT * FROM calibration_scores
@@ -501,7 +531,8 @@ def get_latest_calibration(user_id: int):
 
 
 @app.get("/calibration/{user_id}/trend", response_model=list[CalibrationScoreOut])
-def get_calibration_trend(user_id: int):
+def get_calibration_trend(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     rows = conn.execute(
         """SELECT * FROM calibration_scores
@@ -513,7 +544,8 @@ def get_calibration_trend(user_id: int):
 
 
 @app.post("/documents", response_model=DocumentOut, status_code=201)
-async def upload_document(user_id: int, file: UploadFile = File(...)):
+async def upload_document(user_id: int, file: UploadFile = File(...), user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     content = await file.read()
     try:
         text = extract_text(file.filename, content)
@@ -549,7 +581,7 @@ async def upload_document(user_id: int, file: UploadFile = File(...)):
 
 
 @app.get("/documents/{document_id}", response_model=DocumentOut)
-def get_document(document_id: int):
+def get_document(document_id: int, user: dict = Depends(current_user)):
     conn = get_connection()
     row = conn.execute(
         "SELECT * FROM documents WHERE document_id = ?", (document_id,)
@@ -557,11 +589,13 @@ def get_document(document_id: int):
     conn.close()
     if row is None:
         raise HTTPException(status_code=404, detail="Document not found")
+    require_owner(user, row["user_id"])
     return dict(row)
 
 
 @app.get("/documents", response_model=list[DocumentOut])
-def list_documents(user_id: int):
+def list_documents(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     rows = conn.execute(
         "SELECT * FROM documents WHERE user_id = ? ORDER BY document_id",
@@ -571,8 +605,27 @@ def list_documents(user_id: int):
     return [dict(row) for row in rows]
 
 
+@app.get("/documents/{document_id}/questions", response_model=list[QuestionOut])
+def document_questions(document_id: int, user: dict = Depends(current_user)):
+    conn = get_connection()
+    try:
+        document = conn.execute(
+            "SELECT user_id FROM documents WHERE document_id = ?", (document_id,)
+        ).fetchone()
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        require_owner(user, document["user_id"])
+        rows = conn.execute(
+            "SELECT * FROM questions WHERE document_id = ? AND owner_user_id = ? AND parent_question_id IS NULL ORDER BY question_id",
+            (document_id, user["user_id"]),
+        ).fetchall()
+        return [_row_to_question(row) for row in rows]
+    finally:
+        conn.close()
+
+
 @app.post("/documents/{document_id}/generate", response_model=DocumentGenerateResponse, status_code=201)
-def generate_from_document(document_id: int):
+def generate_from_document(document_id: int, user: dict = Depends(current_user)):
     conn = get_connection()
     try:
         document = conn.execute(
@@ -580,6 +633,7 @@ def generate_from_document(document_id: int):
         ).fetchone()
         if document is None:
             raise HTTPException(status_code=404, detail="Document not found")
+        require_owner(user, document["user_id"])
         if not document["extracted_text"] or not document["extracted_text"].strip():
             raise HTTPException(
                 status_code=400, detail="Document has no extracted text to generate from"
@@ -589,7 +643,6 @@ def generate_from_document(document_id: int):
         topic = document["filename"].rsplit(".", 1)[0]
 
         try:
-            revision_guide = generate_revision_guide(document_text)
             generated = generate_mcqs_from_document(document_text, count=5)
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
@@ -598,9 +651,11 @@ def generate_from_document(document_id: int):
         for q in generated:
             cursor = conn.execute(
                 """INSERT INTO questions
-                   (topic, prompt_text, question_type, options, correct_answer, difficulty)
-                   VALUES (?, ?, 'mcq', ?, ?, ?)""",
+                   (owner_user_id, document_id, topic, prompt_text, question_type, options, correct_answer, difficulty)
+                   VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?)""",
                 (
+                    user["user_id"],
+                    document_id,
                     topic,
                     q["prompt_text"],
                     json.dumps(q["options"]),
@@ -614,7 +669,7 @@ def generate_from_document(document_id: int):
             created.append(_row_to_question(row))
         conn.commit()
 
-        return {"revision_guide": revision_guide, "questions": created}
+        return {"questions": created}
     except (sqlite3.IntegrityError, KeyError) as e:
         conn.rollback()
         raise HTTPException(status_code=502, detail=f"Malformed question from Gemini: {e}")
@@ -622,8 +677,64 @@ def generate_from_document(document_id: int):
         conn.close()
 
 
+@app.get("/study/{document_id}/next")
+def next_study_question(document_id: int, session_id: int,
+                        mode: Literal["question", "flashcard"] = "question",
+                        user: dict = Depends(current_user)):
+    require_session_owner(user, session_id)
+    conn = get_connection()
+    try:
+        document = conn.execute("SELECT * FROM documents WHERE document_id = ?", (document_id,)).fetchone()
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        require_owner(user, document["user_id"])
+        session = conn.execute("SELECT end_time FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
+        if session["end_time"]:
+            raise HTTPException(status_code=409, detail="This study session has ended.")
+        history = response_history(conn, user["user_id"], document_id, mode)
+        profile = signals(history)
+        questions = [dict(row) for row in conn.execute(
+            """SELECT * FROM questions q WHERE document_id = ? AND owner_user_id = ?
+               AND parent_question_id IS NULL AND NOT EXISTS
+               (SELECT 1 FROM responses r WHERE r.question_id = q.question_id AND r.session_id = ?)""",
+            (document_id, user["user_id"], session_id))]
+        due = {row[0] for row in conn.execute(
+            "SELECT question_id FROM review_items WHERE user_id = ? AND next_review_date <= datetime('now')",
+            (user["user_id"],))}
+        selected = choose_question(questions, history, due, profile["target_difficulty"])
+        if selected:
+            selected = _row_to_question(selected)
+            if mode == "question":
+                selected.pop("correct_answer", None)
+                selected.pop("reference_answer", None)
+        return {"question": selected, "remaining": len(questions), "adaptation": profile}
+    finally:
+        conn.close()
+
+
+@app.get("/analytics/{user_id}")
+def study_analytics(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
+    conn = get_connection()
+    try:
+        # Separate scored answers from self-reported recall, including their pace baselines.
+        profiles = {}
+        for mode in ("question", "flashcard"):
+            history = response_history(conn, user_id, mode=mode)
+            topics = {}
+            for row in history:
+                topics.setdefault((row["document_id"], row["topic"]), []).append(row)
+            profiles[mode] = {"overall": signals(history), "topics": [
+                {"document_id": doc_id, "topic": topic, **signals(rows)}
+                for (doc_id, topic), rows in topics.items()]}
+        return profiles
+    finally:
+        conn.close()
+
+
 @app.get("/learning-state/{user_id}", response_model=list[LearningStateTopicCounts])
-def get_learning_state(user_id: int):
+def get_learning_state(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     try:
         user = conn.execute(
@@ -632,20 +743,11 @@ def get_learning_state(user_id: int):
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        rows = conn.execute(
-            """SELECT q.topic, r.confidence, r.is_correct, r.response_time_ms
-               FROM responses r
-               JOIN sessions s ON s.session_id = r.session_id
-               JOIN questions q ON q.question_id = r.question_id
-               WHERE s.user_id = ?""",
-            (user_id,),
-        ).fetchall()
-
+        rows = response_history(conn, user_id, mode="question")
         counts_by_topic: dict[str, dict[str, int]] = {}
-        for row in rows:
-            label = classify_learning_state(
-                row["confidence"], bool(row["is_correct"]), row["response_time_ms"]
-            )
+        for index, row in enumerate(rows):
+            comparable = [r for r in rows[index:] if r["document_id"] == row["document_id"] and r["topic"] == row["topic"]]
+            label = signals(comparable)["state"]
             topic_counts = counts_by_topic.setdefault(row["topic"], {})
             topic_counts[label] = topic_counts.get(label, 0) + 1
 
@@ -658,12 +760,13 @@ def get_learning_state(user_id: int):
 
 
 @app.get("/review/{user_id}", response_model=list[ReviewItemOut])
-def get_due_review_items(user_id: int):
+def get_due_review_items(user_id: int, user: dict = Depends(current_user)):
     """
     Questions due for review right now (next_review_date <= now),
     prioritized so the user's weakest topics — lowest accuracy so far —
     surface first, then earliest-due within a topic.
     """
+    require_owner(user, user_id)
     conn = get_connection()
     try:
         user = conn.execute(
@@ -700,7 +803,8 @@ def get_due_review_items(user_id: int):
 
 
 @app.post("/journal-entries", response_model=JournalEntryOut, status_code=201)
-def create_journal_entry(entry: JournalEntryCreate):
+def create_journal_entry(entry: JournalEntryCreate, user: dict = Depends(current_user)):
+    require_session_owner(user, entry.session_id)
     if not entry.entry_text.strip():
         raise HTTPException(status_code=400, detail="entry_text cannot be empty")
 
@@ -732,7 +836,8 @@ def create_journal_entry(entry: JournalEntryCreate):
 
 
 @app.get("/journal-entries", response_model=list[JournalEntryOut])
-def list_journal_entries(user_id: int):
+def list_journal_entries(user_id: int, user: dict = Depends(current_user)):
+    require_owner(user, user_id)
     conn = get_connection()
     rows = conn.execute(
         """SELECT j.* FROM journal_entries j
@@ -749,7 +854,9 @@ ASSISTANT_RATE_LIMIT = RateLimiter(max_requests=10, window_seconds=60)
 
 
 @app.post("/assistant", response_model=AssistantResponse)
-def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
+def ask_assistant_endpoint(request: AssistantRequest, http_request: Request, user: dict = Depends(current_user)):
+    if request.session_id is not None:
+        require_session_owner(user, request.session_id)
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
@@ -769,8 +876,7 @@ def ask_assistant_endpoint(request: AssistantRequest, http_request: Request):
         # Best-effort context: the topic of the most recent question answered
         # in this session, if any, plus recent behavioral signals (confidence,
         # correctness, response time) to give Zen something to react to. A
-        # missing/unknown session just means no context, not an error — this
-        # endpoint doesn't write anything.
+        # Session ownership was checked before reading any context.
         row = conn.execute(
             """SELECT q.topic FROM responses r
                JOIN questions q ON q.question_id = r.question_id

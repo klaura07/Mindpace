@@ -1,31 +1,36 @@
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import AssistantWidget from "../components/AssistantWidget";
-import CursorGlow from "../components/CursorGlow";
-import { AssistantSessionProvider, useAssistantSession } from "../context/AssistantSessionContext";
+import { StudyProvider, useStudy } from "../context/StudyContext";
+import { AssistantSessionProvider } from "../context/AssistantSessionContext";
+import { useAuth } from "../context/AuthContext";
+import "./PlatformTheme.css";
 
-// Zen is only offered on the pages where it makes sense to interrupt with a
-// study aside: taking a quiz, or reviewing progress on the dashboard.
-const ASSISTANT_ROUTES = new Set(["/quiz", "/dashboard"]);
+// Keep the assistant off the active study screen to avoid interruptions.
+const ASSISTANT_ROUTES = new Set(["/dashboard"]);
 
 function LayoutAssistant() {
   const location = useLocation();
-  const { sessionId } = useAssistantSession();
+  const { study } = useStudy();
+  const { user } = useAuth();
+  if (!user) return null;
   if (!ASSISTANT_ROUTES.has(location.pathname)) return null;
-  return <AssistantWidget sessionId={sessionId} />;
+  return <AssistantWidget sessionId={study.sessionId} />;
 }
 
 export default function AppLayout() {
+  const { user } = useAuth();
   return (
-    <AssistantSessionProvider>
+    <AssistantSessionProvider key={user?.user_id ?? "anonymous"}>
+      <StudyProvider>
       <div className="app-shell">
         <Sidebar />
         <main className="app-content">
           <Outlet />
         </main>
         <LayoutAssistant />
-        <CursorGlow />
       </div>
+      </StudyProvider>
     </AssistantSessionProvider>
   );
 }
