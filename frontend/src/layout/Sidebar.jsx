@@ -1,8 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
   DashboardIcon,
-  HomeIcon,
-  LoginIcon,
+  LogoMark,
   QuizIcon,
   ReviewIcon,
   UnwindIcon,
@@ -10,27 +11,39 @@ import {
 } from "../components/icons";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Home", Icon: HomeIcon, end: true },
   { to: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { to: "/upload", label: "Upload", Icon: UploadIcon },
-  { to: "/quiz", label: "Quiz", Icon: QuizIcon },
+  { to: "/study-time", label: "Study time", Icon: QuizIcon },
   { to: "/review", label: "Review", Icon: ReviewIcon },
-  { to: "/unwind", label: "Unwind", Icon: UnwindIcon },
-  { to: "/login", label: "Login / Signup", Icon: LoginIcon },
+  { to: "/activities", label: "Activities", Icon: UnwindIcon },
 ];
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const loggedIn = Boolean(localStorage.getItem("user_id"));
+  const { user, logout } = useAuth();
+  const loggedIn = Boolean(user);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
 
-  function handleLogout() {
-    localStorage.removeItem("user_id");
-    navigate("/login");
+  async function handleLogout() {
+    setLoggingOut(true);
+    setLogoutError(null);
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setLogoutError(err.message);
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   return (
     <nav className="sidebar">
-      <div className="sidebar-brand">MindPace</div>
+      <div className="sidebar-brand">
+        <LogoMark className="landing-logo-icon" aria-hidden="true" />
+        MindPace
+      </div>
       <ul className="sidebar-nav">
         {NAV_ITEMS.map((item) => (
           <li key={item.to}>
@@ -46,10 +59,11 @@ export default function Sidebar() {
         ))}
       </ul>
       {loggedIn && (
-        <button className="sidebar-logout" onClick={handleLogout}>
-          Log out
+        <button className="sidebar-logout" disabled={loggingOut} onClick={handleLogout}>
+          {loggingOut ? "Logging out..." : "Log out"}
         </button>
       )}
+      {logoutError && <p role="alert">{logoutError}</p>}
     </nav>
   );
 }

@@ -1,0 +1,34 @@
+.zen-widget {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.zen-launcher {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--accent-deep);
+  border-radius: 50%;
+  background: var(--accent-deep);
+  color: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.zen-launcher svg {
+  width: 32px;
+  height: 32px;
+}
+
+.zen-launcher:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

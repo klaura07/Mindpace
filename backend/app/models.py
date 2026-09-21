@@ -6,11 +6,22 @@ FastAPI uses these for two things automatically: validating incoming
 JSON (a malformed request becomes a clear 422 error, not a crash deep
 in your code), and generating the interactive docs at /docs.
 """
-from pydantic import BaseModel, EmailStr
+from typing import Literal
+from pydantic import BaseModel, EmailStr, Field, SecretStr, field_validator, model_validator
 
 
-class UserCreate(BaseModel):
+class UserLogin(BaseModel):
     email: EmailStr
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class UserCreate(UserLogin):
+    password: SecretStr = Field(min_length=4, max_length=15)
 
 
 class UserOut(BaseModel):
@@ -58,8 +69,18 @@ class ResponseCreate(BaseModel):
     session_id: int
     question_id: int
     answer_text: str | None = None
-    confidence: float
-    response_time_ms: int | None = None
+    confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
+    response_time_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+    response_mode: Literal["question", "flashcard"] = "question"
+    recalled: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_attempt(self):
+        if self.response_mode == "flashcard" and self.recalled is None:
+            raise ValueError("Flashcards require a recall rating")
+        if self.response_mode == "question" and (not self.answer_text or not self.answer_text.strip()):
+            raise ValueError("An answer is required")
+        return self
 
 
 class ResponseOut(BaseModel):
@@ -71,6 +92,9 @@ class ResponseOut(BaseModel):
     confidence: float
     response_time_ms: int | None
     answered_at: str
+    response_mode: str = "question"
+    correct_answer: str | None = None
+    adaptation: dict | None = None
 
 
 class CalibrationScoreOut(BaseModel):
@@ -94,7 +118,6 @@ class DocumentOut(BaseModel):
 
 
 class DocumentGenerateResponse(BaseModel):
-    revision_guide: str
     questions: list[QuestionOut]
 
 

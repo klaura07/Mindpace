@@ -1,0 +1,9 @@
+.study-timer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.study-clock { font-size: 2rem; font-variant-numeric: tabular-nums; }
+.study-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.study-confidence { margin: 1.25rem 0; }
+.study-confidence input { width: 100%; }
+.study-confidence-labels { display: flex; justify-content: space-between; font-size: .85rem; }
+.study-question fieldset { min-width: 0; }
+.study-card-answer { padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; }
+.study-analytics { overflow-x: auto; }

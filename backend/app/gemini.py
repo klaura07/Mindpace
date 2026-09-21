@@ -6,6 +6,7 @@ this is a single JSON POST, no need for an SDK.
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -13,7 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash").strip()
 GEMINI_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 )
@@ -56,35 +58,46 @@ def _call_gemini(prompt: str, response_schema: dict | None = None) -> str:
         "generationConfig": generation_config,
     }
 
-    request = urllib.request.Request(
-        f"{GEMINI_URL}?key={api_key}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            body = json.loads(response.read())
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode()
-        if os.getenv("DEBUG"):
-            print(f"[gemini debug] {e.code} response body:\n{error_body}")
-        # The full error_body is only logged above (it's a large, technical
-        # payload from Gemini) — callers get a short, clean message instead
-        # of that raw JSON dumped straight into an end-user-facing error.
-        if e.code == 429:
-            raise RuntimeError(
-                "Gemini API rate limit or quota exceeded — please try again later."
-            ) from e
-        raise RuntimeError(f"Gemini API error: {e.code}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Gemini API unreachable: {e.reason}") from e
-    except TimeoutError as e:
-        # A read timeout on an already-open connection raises a bare
-        # TimeoutError, not URLError — catch it separately or it escapes
-        # as an unhandled 500 instead of a clean RuntimeError/502.
-        raise RuntimeError("Gemini API request timed out") from e
+    # Retry only explicit temporary upstream failures. Authentication, quota,
+    # and invalid requests need action rather than repeated generation calls.
+    models = [GEMINI_MODEL, GEMINI_MODEL, GEMINI_FALLBACK_MODEL or GEMINI_MODEL]
+    for attempt, model in enumerate(models):
+        request = urllib.request.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                body = json.loads(response.read())
+            break
+        except urllib.error.HTTPError as e:
+            status = e.code
+            e.close()
+            if status in (500, 502, 503, 504):
+                if attempt < len(models) - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError(
+                    f"Gemini is temporarily unavailable ({status}). "
+                    "Automatic retries could not complete. Please try again shortly."
+                ) from e
+            if status == 429:
+                raise RuntimeError(
+                    "Gemini API rate limit or quota exceeded - please try again later."
+                ) from e
+            if status in (401, 403):
+                raise RuntimeError(
+                    "Gemini API access was denied. Check the API key and its permissions."
+                ) from e
+            raise RuntimeError(f"Gemini API error: {status}") from e
+        except urllib.error.URLError as e:
+            raise RuntimeError("Gemini API unreachable. Check the server's internet connection.") from e
+        except TimeoutError as e:
+            raise RuntimeError("Gemini API request timed out. Please try again.") from e
+        except json.JSONDecodeError as e:
+            raise RuntimeError("Gemini returned an invalid response. Please try again.") from e
 
     try:
         return body["candidates"][0]["content"]["parts"][0]["text"]
@@ -103,7 +116,8 @@ def generate_mcqs(topic: str, count: int) -> list[dict]:
         f"Generate {count} multiple-choice questions on the topic \"{topic}\". "
         "Each question must have exactly 4 answer options, one correct_answer "
         "that exactly matches one of the options, and a difficulty rating from "
-        "1 (easy) to 3 (hard)."
+        "1 (easy) to 3 (hard). Phrase each prompt as a standalone recall question "
+        "that also works on a flashcard without seeing the options. Generate questions only."
     )
     text = _call_gemini(prompt, response_schema=QUESTION_RESPONSE_SCHEMA)
     try:
@@ -112,29 +126,12 @@ def generate_mcqs(topic: str, count: int) -> list[dict]:
         raise RuntimeError(f"Unexpected Gemini response shape: {text}") from e
 
 
-def generate_revision_guide(document_text: str) -> str:
-    """
-    Asks Gemini for a concise revision guide (key points + short summary)
-    grounded in `document_text`. Returns the guide as plain text.
-    """
-    prompt = (
-        "Here is the text of a document a student is studying:\n\n"
-        f"{document_text}\n\n"
-        "Write a concise revision guide for this document: a bulleted list "
-        "of key points, followed by a short summary paragraph. Base it only "
-        "on the content above, not on outside knowledge of the topic."
-    )
-    return _call_gemini(prompt)
-
-
 ZEN_SYSTEM_INSTRUCTION = (
-    "You are Zen, a study companion embedded in the MindPace app. Your "
-    "voice is calm but dryly sarcastic — you occasionally tease the "
-    "student about overconfidence or rushing, but never cruelly. Every "
-    "reply must nudge them toward one genuinely relaxing or reflective "
-    "action: a breathing pause, a reframe of a mistake, or a small, "
-    "specific win to focus on next. Keep replies to 2-3 sentences, "
-    "maximum — no padding, no filler, no bullet lists."
+    "You are Zen, a calm study companion in MindPace. Be brief and supportive. "
+    "Help with focus and practice questions only. Never generate summaries, "
+    "revision guides, or study notes. Do not tease or judge the learner. "
+    "Timing and confidence are tentative practice signals, not evidence of distraction. "
+    "Keep replies to 2-3 sentences."
 )
 
 
@@ -174,8 +171,8 @@ def ask_assistant(message: str, topic: str | None = None, signals: dict | None =
         if signal_summary:
             system_instruction += (
                 f" Their behavioral signals from this session: {signal_summary}. "
-                "Let this inform your tone (e.g. tease gently if they're "
-                "answering fast and wrong, or overconfident and missing) "
+                "Use these tentative signals supportively if they are "
+                "answering quickly and missing, or uncertain "
                 "without reciting the raw numbers back at them."
             )
 
@@ -243,7 +240,10 @@ def generate_mcqs_from_document(document_text: str, count: int = 5) -> list[dict
         "answer must be answerable directly from the text above, not from "
         "general knowledge of the subject. Each question must have exactly "
         "4 answer options, one correct_answer that exactly matches one of "
-        "the options, and a difficulty rating from 1 (easy) to 3 (hard)."
+        "the options, and a difficulty rating from 1 (easy) to 3 (hard). "
+        "Include a mix of all three difficulty levels when the source permits. "
+        "Phrase each prompt as a standalone recall question that also works on "
+        "a flashcard without seeing the options. Generate questions only, never summaries or notes."
     )
     text = _call_gemini(prompt, response_schema=QUESTION_RESPONSE_SCHEMA)
     try:
