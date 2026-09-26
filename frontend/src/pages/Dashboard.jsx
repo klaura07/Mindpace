@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStudyAnalytics, uploadDocument } from "../api";
+import PlatformPage from "../components/PlatformPage";
 import "./Dashboard.css";
 import "./Study.css";
 
@@ -39,10 +40,13 @@ export default function Dashboard() {
     finally { setUploading(false); }
   }
 
-  return <div className="dashboard">
-    <header className="dashboard-heading"><p className="dashboard-eyebrow">Your learning space</p>
-      <h1>Dashboard</h1><p>Your answers, confidence, and active response time guide your next practice.</p>
-    </header>
+  return <PlatformPage className="dashboard" title="Dashboard" eyebrow="Your learning space"
+    description="Your answers, confidence, and active response time guide your next practice.">
+    {analytics && <div className="doodle-stats" aria-label="Learning overview">
+      <div className="doodle-stat"><span>Questions answered</span><strong>{analytics.question.overall.attempts}</strong><small>one step at a time</small></div>
+      <div className="doodle-stat"><span>Cards practiced</span><strong>{analytics.flashcard.overall.attempts}</strong><small>a little more familiar</small></div>
+      <div className="doodle-stat"><span>Question accuracy</span><strong>{percent(analytics.question.overall.accuracy)}</strong><small>from your recent attempts</small></div>
+    </div>}
     <section className="dashboard-upload">
       <h2>Start with your material</h2><p>Upload a document to practice with questions and flashcards.</p>
       <form className="dashboard-upload-form" onSubmit={handleUpload}>
@@ -61,7 +65,7 @@ export default function Dashboard() {
     {error && <p role="alert">{error}</p>}
     {!analytics && !error && <p role="status">Loading learning analytics...</p>}
     {analytics && <>
-      <p>Recent trends use up to 30 attempts per view, from the latest 200 attempts in each mode. Flashcard recall is self-reported and kept separate from scored answers.</p>
+      <p className="doodle-fine-print">Recent trends use up to 30 attempts per view, from the latest 200 attempts in each mode. Flashcard recall is self-reported and kept separate from scored answers.</p>
       <div className="dashboard-progress">
         {Object.entries(analytics).map(([mode, data]) => <section className="study-analytics" key={mode}>
           <h2>{mode === "question" ? "Questions" : "Flashcards"}</h2>
@@ -69,19 +73,19 @@ export default function Dashboard() {
             <p>{data.overall.attempts} recent attempts · {mode === "question" ? "Accuracy" : "Reported recall"}: <strong>{percent(data.overall.accuracy)}</strong></p>
             <p>Confidence: {percent(data.overall.confidence)} · Median active time: {pace(data.overall.median_response_ms)}</p>
             <p>Confidence gap: {Math.round(data.overall.calibration_gap * 100)} percentage points. Positive means confidence is above results; negative means it is below.</p>
-            <table><thead><tr><th>Material</th><th>Attempts</th><th>{mode === "question" ? "Accuracy" : "Recall"}</th><th>Confidence</th><th>Active time</th></tr></thead>
+            <div className="doodle-table-scroll" role="region" aria-label={`${mode === "question" ? "Question" : "Flashcard"} results by material`} tabIndex="0"><table><thead><tr><th>Material</th><th>Attempts</th><th>{mode === "question" ? "Accuracy" : "Recall"}</th><th>Confidence</th><th>Active time</th></tr></thead>
               <tbody>{data.topics.map((topic) => <tr key={`${topic.document_id}-${topic.topic}`}>
                 <td>{topic.document_id ? <Link to={`/study-time?document=${topic.document_id}`}>{topic.topic}</Link> : topic.topic}</td>
                 <td>{topic.attempts}</td><td>{percent(topic.accuracy)}</td><td>{percent(topic.confidence)}</td><td>{pace(topic.median_response_ms)}</td>
               </tr>)}</tbody>
-            </table>
-            {data.topics.map((topic) => <div key={`${topic.document_id}-${topic.topic}-next`}>
+            </table></div>
+            {data.topics.map((topic) => <div className="doodle-topic-note" key={`${topic.document_id}-${topic.topic}-next`}>
               <h3>{topic.topic}: {topic.state}</h3><p>{topic.reason}</p><p>{topic.pace}</p>
             </div>)}
           </>}
         </section>)}
       </div>
-      <p>Timing comparisons need five earlier attempts at the same difficulty and in the same mode. Longer answers alone do not imply distraction.</p>
+      <p className="doodle-fine-print">Timing comparisons need five earlier attempts at the same difficulty and in the same mode. Longer answers alone do not imply distraction.</p>
     </>}
-  </div>;
+  </PlatformPage>;
 }

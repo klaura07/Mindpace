@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "test:study-controls": "node tests/study-controls.mjs",
+    "test:study-motion": "node tests/study-motion.mjs",
+    "test:doodle-tabs": "node tests/doodle-tabs.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

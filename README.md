@@ -66,9 +66,35 @@ Analytics use the latest 200 attempts per mode, with up to 30 attempts per trend
 New responses update analytics immediately; opening the dashboard does not award XP
 or create artificial calibration checkpoints. Existing data is retained by additive migrations.
 
+Study time has a hand-drawn study room with a rainy window, desk companion,
+and a large Pomodoro timer. Optional synthesized rain sound has a volume control
+and stops when leaving the page. Room motion can be paused, respects reduced-motion
+settings, and the page supports full screen where available. Dashboard, Upload,
+Review, and Activities use matching paper panels, sage controls, and their own
+animated doodle scenes. One shared motion preference follows the learner across
+all five tabs and survives refresh. The sidebar and layouts adapt to phone sizes.
+An explicit motion choice overrides the system preference. Empty libraries offer
+an Upload to begin link; failed material/question requests offer retry controls.
+Motion on animates the companion's breathing and blinking, falling rain, rising
+steam, swaying leaves, and floating sleep marks. Motion off pauses them together.
+The first-question retry keeps the same session, and a suggested break starts
+its timer when selected.
+
 The Activities tab is reserved for games chosen by the project owner. The sand
-game is removed. Visual redesign and background music await the owner's references.
+game is removed. Background music playlists remain planned.
 
 Validation: `cd backend; .\venv\Scripts\python.exe -m pytest tests -q`.
 For the frontend, run `npm.cmd run build`, `npm.cmd run lint`, and
 `node --test --test-isolation=none src/study/*.test.js` from `frontend`.
+
+Study control regression checks: with the frontend running on port 5173,
+run `npm.cmd run test:study-controls` from `frontend`. This requires Playwright
+and Microsoft Edge; `PLAYWRIGHT_MODULE` can point to an existing Playwright
+installation. The checks use isolated API fixtures, including failed requests,
+and never modify the learner's database.
+`npm.cmd run test:study-motion` checks actual rendered motion and paused animation
+timelines on desktop/mobile, with both system motion preferences, plus keyboard
+control and persistence after refresh. It uses the same Playwright setup.
+`npm.cmd run test:doodle-tabs` checks Dashboard analytics/upload, the document
+library and generation actions, Review answers, assistant controls, shared motion,
+and responsive layouts using isolated API fixtures.
