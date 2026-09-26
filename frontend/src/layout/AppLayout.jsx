@@ -4,7 +4,9 @@ import AssistantWidget from "../components/AssistantWidget";
 import { StudyProvider, useStudy } from "../context/StudyContext";
 import { AssistantSessionProvider } from "../context/AssistantSessionContext";
 import { useAuth } from "../context/AuthContext";
+import { RoomMotionProvider, useRoomMotion } from "../context/RoomMotionContext";
 import "./PlatformTheme.css";
+import "./DoodleTheme.css";
 
 // Keep the assistant off the active study screen to avoid interruptions.
 const ASSISTANT_ROUTES = new Set(["/dashboard"]);
@@ -18,18 +20,23 @@ function LayoutAssistant() {
   return <AssistantWidget sessionId={study.sessionId} />;
 }
 
-export default function AppLayout() {
-  const { user } = useAuth();
-  return (
-    <AssistantSessionProvider key={user?.user_id ?? "anonymous"}>
-      <StudyProvider>
-      <div className="app-shell">
+function AppFrame() {
+  const { still } = useRoomMotion();
+  return <div className={`app-shell doodle-app ${still ? "motion-paused" : "motion-enabled"}`}>
         <Sidebar />
         <main className="app-content">
           <Outlet />
         </main>
         <LayoutAssistant />
-      </div>
+      </div>;
+}
+
+export default function AppLayout() {
+  const { user } = useAuth();
+  return (
+    <AssistantSessionProvider key={user?.user_id ?? "anonymous"}>
+      <StudyProvider>
+        <RoomMotionProvider><AppFrame /></RoomMotionProvider>
       </StudyProvider>
     </AssistantSessionProvider>
   );

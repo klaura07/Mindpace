@@ -136,7 +136,8 @@ export default function Review() {
       description="Past mistakes and weak areas, grouped by topic.">
 
       <section>
-        <h2>Due for review</h2>
+        <div className="doodle-section-heading"><h2>Due for review</h2>{dueItems && <span>{dueItems.length} to revisit</span>}</div>
+        {dueItems === null && !dueError && <p role="status">Finding the notes worth another look...</p>}
         {dueError && <p role="alert">{dueError}</p>}
         {dueItems && dueItems.length === 0 && (
           <EmptyState

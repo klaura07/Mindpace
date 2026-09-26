@@ -66,7 +66,8 @@ export default function Upload() {
       description="Upload a document to generate questions and flashcards from it.">
 
       <section>
-        <h2>Documents</h2>
+        <h2>A home for your notes</h2>
+        <p>Bring a chapter, a few pages, or your own notes. Turn them into a little practice.</p>
         <form onSubmit={handleUpload}>
           <div className="platform-file-field">
             <label htmlFor="doc-file">Upload a document (PDF, DOCX, or TXT)</label>
@@ -83,6 +84,9 @@ export default function Upload() {
           </button>
         </form>
         {uploadError && <p role="alert">{uploadError}</p>}
+      </section>
+      <section>
+        <div className="doodle-section-heading"><h2>Your little library</h2><span>{documents.length} {documents.length === 1 ? "document" : "documents"}</span></div>
         {documentsError && <p role="alert">{documentsError}</p>}
 
         {documents.length === 0 && !documentsError && (
@@ -98,9 +102,8 @@ export default function Upload() {
               const result = docGenerateResults[doc.document_id];
               return (
                 <li key={doc.document_id}>
-                  <p>
-                    {doc.filename} — uploaded {doc.uploaded_at}
-                  </p>
+                  <p className="doodle-document-title"><strong>{doc.filename}</strong><span>Uploaded {doc.uploaded_at}</span></p>
+                  <div className="doodle-document-actions">
                   {!result && (
                     <button
                       onClick={() => handleGenerateFromDocument(doc.document_id)}
@@ -111,9 +114,10 @@ export default function Upload() {
                         : "Generate questions + flashcards"}
                     </button>
                   )}
-                  <button onClick={() => navigate(`/study-time?document=${doc.document_id}`)} disabled={generatingDocId === doc.document_id}>
+                  <button className="platform-secondary" onClick={() => navigate(`/study-time?document=${doc.document_id}`)} disabled={generatingDocId === doc.document_id}>
                     Start study time
                   </button>
+                  </div>
                   {docGenerateErrors[doc.document_id] && (
                     <p role="alert">{docGenerateErrors[doc.document_id]}</p>
                   )}
