@@ -6,3 +6,6 @@ __pycache__/
 
 # logs from start-all.ps1 / start-backend.ps1 / start-frontend.ps1
 *.log
+# local test runs, previews and scratch files
+output/
+tmp/
