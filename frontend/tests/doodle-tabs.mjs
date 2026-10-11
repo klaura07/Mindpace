@@ -15,12 +15,13 @@ try {
     const req = route.request(), path = new URL(req.url()).pathname.replace('/api', '');
     const ok = json => route.fulfill({ json });
     if (path === '/auth/me') return ok({ user_id: 1, email: 'theme-test@example.com' });
-    if (path === '/analytics/1') return ok({ question: metric, flashcard: metric });
+    if (path === '/analytics/1') return ok({ question: metric });
     if (path === '/documents' && req.method() === 'POST') {
       uploads.push(req.postData());
       const doc = { document_id: docs.length + 1, filename: `Notes ${docs.length + 1}.txt`, uploaded_at: '2026-09-26' };
       docs.push(doc); return ok(doc);
     }
+    if (path === '/question-topics') return ok([]);
     if (path === '/documents') return ok(docs);
     if (path.endsWith('/generate')) { generationCount++; return ok({ questions: [question] }); }
     if (path.endsWith('/questions')) return ok([question]);
@@ -43,10 +44,10 @@ try {
   };
   await page.goto('http://localhost:5173/dashboard');
   await page.locator('.doodle-stats').waitFor();
-  assert.deepEqual(await page.locator('.doodle-stat strong').allTextContents(), ['8', '8', '75%']);
+  assert.deepEqual(await page.locator('.doodle-stat strong').allTextContents(), ['8', '75%']);
   await page.getByLabel('Choose a document (PDF, DOCX, or TXT)').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('A primary key identifies a record.') });
   await page.getByRole('button', { name: 'Upload document', exact: true }).click();
-  await page.getByRole('link', { name: 'Start studying' }).waitFor();
+  await page.getByRole('link', { name: 'Dive In' }).waitFor();
   assert.equal(uploads.length, 1); checks.push('Dashboard shows real-shaped metrics and uploads material');
   await page.getByRole('button', { name: 'Open Zen assistant' }).click();
   await page.getByPlaceholder('Ask a question...').fill('Help me get started');
@@ -55,16 +56,15 @@ try {
   await page.getByRole('button', { name: 'Close Zen', exact: true }).click();
   checks.push('The themed Dashboard retains the assistant interaction');
   await nav('Upload');
-  await page.getByLabel('Upload a document (PDF, DOCX, or TXT)').setInputFiles({ name: 'chapter.txt', mimeType: 'text/plain', buffer: Buffer.from('A foreign key refers to another table.') });
-  await page.getByRole('button', { name: 'Upload', exact: true }).click();
+  await page.getByLabel('Choose a document (PDF, DOCX, or TXT)').setInputFiles({ name: 'chapter.txt', mimeType: 'text/plain', buffer: Buffer.from('A foreign key refers to another table.') });
+  await page.getByRole('button', { name: 'Upload document', exact: true }).click();
   await page.getByText('Notes 2.txt', { exact: true }).waitFor(); assert.equal(uploads.length, 2);
-  await page.getByRole('button', { name: 'Generate questions + flashcards' }).first().click();
-  await page.getByRole('status').filter({ hasText: '1 questions ready' }).waitFor();
-  assert.equal(generationCount, 1);
-  await page.getByRole('button', { name: 'Start study time', exact: true }).first().click();
-  await page.waitForURL('**/study-time?document=1');
-  assert.equal(await page.getByLabel('Your study material').inputValue(), '1');
-  checks.push('Upload, library, generation, and document-specific Study navigation work');
+  const choices = page.getByRole('region', { name: 'Choose how to learn' });
+  await choices.getByRole('link', { name: 'Keep me company', exact: true }).click();
+  await page.waitForURL('**/study-time?document=2');
+  await page.getByRole('heading', { name: 'Notes 2.txt', exact: true }).waitFor();
+  assert.equal(generationCount, 0);
+  checks.push('Uploading material offers both paths; company mode needs no generation');
   await nav('Review'); await page.getByRole('button', { name: 'Review now' }).click();
   await page.getByRole('radio', { name: 'Primary key', exact: true }).check();
   await page.getByRole('slider', { name: /How confident/ }).fill('0.9');
@@ -72,33 +72,28 @@ try {
   await page.getByText('Correct!', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByText('All caught up', { exact: true }).waitFor();
-  assert.equal(responses[0].question_id, 8); assert.equal(responses[0].confidence, .9);
-  checks.push('Review generates a variant, scores an answer, and clears the completed item');
+  assert.equal(responses[0].question_id, 7); assert.equal(responses[0].confidence, .9);
+  checks.push('Review reuses a saved question, scores an answer, and clears the completed item');
   await nav('Activities');
   await page.getByRole('link', { name: 'Return to study time', exact: true }).click();
   await page.waitForURL('**/study-time'); checks.push('Activities returns to Study time');
-  await page.getByRole('button', { name: 'Pause room motion' }).click();
-  for (const name of ['Dashboard', 'Upload', 'Review', 'Activities', 'Study time']) {
-    await nav(name); await page.getByRole('button', { name: 'Resume room motion' }).waitFor();
-  }
-  await page.getByRole('button', { name: 'Resume room motion' }).click();
-  for (const name of ['Dashboard', 'Upload', 'Review', 'Activities']) {
-    await nav(name); await page.getByRole('button', { name: 'Pause room motion' }).waitFor();
+  for (const name of ['Dashboard', 'Upload', 'Questions', 'Review', 'Activities']) {
+    await nav(name);
+    assert.equal(await page.getByRole('button', { name: /Pause animations|Enable animations/ }).count(), 0);
     const buddy = page.locator('.doodle-buddy'); const before = await buddy.evaluate(e => getComputedStyle(e).transform);
     await page.waitForTimeout(300); assert.notEqual(await buddy.evaluate(e => getComputedStyle(e).transform), before);
   }
-  checks.push('Motion setting is shared by all tabs and every new illustration animates');
+  checks.push('Every illustration keeps animating without a motion button');
   for (const width of [320, 390, 768]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const name of ['Dashboard', 'Upload', 'Review', 'Activities', 'Study time']) {
+    for (const name of ['Dashboard', 'Upload', 'Questions', 'Review', 'Activities', 'Study time']) {
       await nav(name);
       assert.equal(await page.locator('.app-content').evaluate(e => e.scrollWidth > e.clientWidth), false, `${name}: ${width}px overflow`);
       await page.locator('.app-content').evaluate(e => e.scrollTop = 0);
-      const motionBox = await page.getByRole('button', { name: 'Pause room motion' }).boundingBox();
-      assert.ok(motionBox && motionBox.x >= 64 && motionBox.x + motionBox.width <= width && motionBox.y >= 0, `${name}: motion control outside viewport at ${width}px: ${JSON.stringify(motionBox)}`);
+      assert.equal(await page.getByRole('button', { name: /Pause animations|Enable animations/ }).count(), 0);
     }
   }
-  checks.push('All five tabs fit 320px, 390px, and 768px widths');
+  checks.push('All six tabs fit 320px, 390px, and 768px widths');
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: checks.length, checks, browserErrors: errors }, null, 2));
 } finally { await browser.close(); }

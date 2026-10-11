@@ -35,10 +35,18 @@ CREATE TABLE IF NOT EXISTS questions (
     question_type        TEXT NOT NULL DEFAULT 'mcq' CHECK (question_type IN ('mcq', 'descriptive')),
     options              TEXT,   -- JSON array of answer choices, as TEXT (e.g. '["A","B","C"]')
     correct_answer       TEXT,
+    explanation          TEXT,
+    is_active            INTEGER NOT NULL DEFAULT 1,
     difficulty           INTEGER DEFAULT 1,
     parent_question_id   INTEGER,
     created_at            TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (parent_question_id) REFERENCES questions(question_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS study_topics (
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    topic TEXT NOT NULL,
+    PRIMARY KEY (user_id, topic)
 );
 
 -- RESPONSES: one row per answer, tied to a session AND a question.
@@ -141,6 +149,13 @@ CREATE INDEX IF NOT EXISTS idx_journal_session ON journal_entries(session_id);
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_items_user ON review_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_items_due ON review_items(user_id, next_review_date);
+
+-- Hidden concepts retain their questions and answer history and can be re-added.
+CREATE TABLE IF NOT EXISTS hidden_study_topics (
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    topic TEXT NOT NULL,
+    PRIMARY KEY (user_id, topic)
+);
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
     token_hash TEXT PRIMARY KEY,

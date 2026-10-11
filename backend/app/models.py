@@ -49,6 +49,7 @@ class QuestionOut(BaseModel):
     question_type: str
     options: list[str] | None
     correct_answer: str | None
+    explanation: str | None = None
     difficulty: int
     parent_question_id: int | None
     created_at: str
@@ -71,13 +72,10 @@ class ResponseCreate(BaseModel):
     answer_text: str | None = None
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     response_time_ms: int | None = Field(default=None, ge=0, le=86_400_000)
-    response_mode: Literal["question", "flashcard"] = "question"
-    recalled: bool | None = None
+    response_mode: Literal["question"] = "question"
 
     @model_validator(mode="after")
     def validate_attempt(self):
-        if self.response_mode == "flashcard" and self.recalled is None:
-            raise ValueError("Flashcards require a recall rating")
         if self.response_mode == "question" and (not self.answer_text or not self.answer_text.strip()):
             raise ValueError("An answer is required")
         return self
@@ -94,6 +92,7 @@ class ResponseOut(BaseModel):
     answered_at: str
     response_mode: str = "question"
     correct_answer: str | None = None
+    explanation: str | None = None
     adaptation: dict | None = None
 
 
@@ -104,9 +103,37 @@ class CalibrationScoreOut(BaseModel):
     computed_at: str
 
 
-class QuestionGenerateRequest(BaseModel):
-    topic: str
-    count: int = 5
+class TopicCreate(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+
+    @field_validator("topic", mode="before")
+    @classmethod
+    def trim_topic(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class QuestionGenerateRequest(TopicCreate):
+    count: int = Field(default=5, ge=1, le=20)
+
+
+class GeneratedQuestion(BaseModel):
+    prompt_text: str = Field(min_length=1)
+    options: list[str] = Field(min_length=4, max_length=4)
+    correct_answer: str = Field(min_length=1)
+    explanation: str = Field(min_length=30)
+    difficulty: int = Field(ge=1, le=3, strict=True)
+
+    @model_validator(mode="after")
+    def valid_choices(self):
+        self.prompt_text = self.prompt_text.strip()
+        self.options = [option.strip() for option in self.options]
+        self.correct_answer = self.correct_answer.strip()
+        self.explanation = self.explanation.strip()
+        if (not self.prompt_text or any(not option for option in self.options)
+                or len({option.casefold() for option in self.options}) != 4
+                or self.correct_answer not in self.options or len(self.explanation) < 30):
+            raise ValueError("Questions need four distinct choices and a matching answer")
+        return self
 
 
 class DocumentOut(BaseModel):
@@ -115,6 +142,7 @@ class DocumentOut(BaseModel):
     filename: str
     extracted_text: str | None
     uploaded_at: str
+    question_count: int = 0
 
 
 class DocumentGenerateResponse(BaseModel):

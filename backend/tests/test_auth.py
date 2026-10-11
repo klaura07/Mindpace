@@ -38,7 +38,7 @@ def test_document_quiz_questions_are_persistent_and_isolated(client, monkeypatch
     second = upload("Python uses indentation.")
     assert client.get(f"/documents/{first}/questions").json() == []
     monkeypatch.setattr(main, "generate_mcqs_from_document", lambda text, count: [
-        {"prompt_text": text, "options": ["A", "B", "C", "D"], "correct_answer": "A", "difficulty": 1}
+        {"prompt_text": text, "options": ["A", "B", "C", "D"], "correct_answer": "A", "explanation": "The governing principle makes A correct; the other choices confuse cause with effect.", "difficulty": 1}
     ])
     generated = client.post(f"/documents/{first}/generate")
     assert generated.status_code == 201, generated.text
@@ -225,7 +225,7 @@ def test_private_resources_require_auth_and_ownership(client, monkeypatch):
 
 def test_generation_and_seeded_question_access(client, monkeypatch):
     user_id = signup(client).json()["user_id"]
-    generated = {"prompt_text": "A question?", "options": ["A", "B"], "correct_answer": "A", "difficulty": 1}
+    generated = {"prompt_text": "A question?", "options": ["A", "B", "C", "D"], "correct_answer": "A", "explanation": "The governing principle makes A correct; the other choices confuse cause with effect.", "difficulty": 1}
     monkeypatch.setattr(main, "generate_mcqs", lambda *args: [generated])
     monkeypatch.setattr(main, "generate_question_variant", lambda *args: generated)
     monkeypatch.setattr(main, "generate_mcqs_from_document", lambda *args, **kwargs: [generated])

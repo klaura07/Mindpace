@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "test:study-controls": "node tests/study-controls.mjs",
+    "test:question-banks": "node tests/question-banks.mjs",
     "test:study-motion": "node tests/study-motion.mjs",
     "test:doodle-tabs": "node tests/doodle-tabs.mjs",
     "preview": "vite preview"

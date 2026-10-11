@@ -144,3 +144,34 @@
   .doodle-app:not(.motion-enabled) .doodle-animated { animation: none; }
   .doodle-app * { transition: none !important; }
 }
+
+/* Two explicit learning paths, with stable controls and long conceptual prompts. */
+.material-actions { flex-wrap: wrap; margin: 16px 0; gap: 12px; }
+.material-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 20px; border-radius: 12px; background: #536b47; color: #fffdf3 !important; text-decoration: none; border: 1px solid #536b47; }
+.material-button.material-company { background: #f2f3e8; color: #424d3e !important; border-color: #ccd1bc; }
+.practice-navigation { display: flex; flex-wrap: wrap; gap: 20px; margin: 12px 0 20px; }
+.question-practice h3 { line-height: 1.6; }
+.question-practice fieldset label { align-items: flex-start; padding: 14px; border: 1px solid #d4d9c8; border-radius: 10px; line-height: 1.6; }
+.question-practice input[type=radio] { flex-shrink: 0; margin-top: 6px; }
+.question-practice .platform-feedback p { line-height: 1.8; }
+.question-practice > .platform-secondary { margin-top: 18px; }
+.study-source { margin: 20px 0; }
+.study-source > div { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin-top: 16px; max-height: 480px; overflow-y: auto; }
+
+.doodle-page :is(section, li):has(> .concept-removal) { position: relative; }
+.doodle-page :is(section, li):has(> .concept-removal) > :is(h2, h3) { padding-right: 42px; overflow-wrap: anywhere; }
+.doodle-app .doodle-page .concept-close { position: absolute; top: 8px; right: 8px; width: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #626e57; box-shadow: none; font: 26px/1 Arial, sans-serif; }
+.doodle-app .doodle-page .concept-close:hover:not(:disabled) { background: #e7ebdd; box-shadow: none; transform: none; }
+.concept-removal > p { margin-top: 12px; }
+.doodle-page .concept-confirmation { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); margin: auto; padding: 36px 28px 28px; border: 1px solid #cdd3bd; border-radius: 9px 15px 11px 17px; background: #fffdf6; color: #515749; box-shadow: 5px 6px 0 #b9c5a780, 0 20px 70px #303e3233; text-align: left; overflow-wrap: anywhere; }
+.concept-confirmation::backdrop { background: #303e3266; backdrop-filter: blur(3px); }
+.concept-confirmation::before { content: ""; position: absolute; top: 10px; left: calc(50% - 32px); width: 64px; height: 12px; background: #b9c5a77d; transform: rotate(-3deg); }
+.doodle-page .concept-confirmation h2 { font-size: 27px; line-height: 1.3; margin: 12px 0; }
+.doodle-page .concept-confirmation-note { color: #727766; font-size: 13px; }
+.concept-confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 24px; padding-bottom: 4px; }
+.doodle-app .doodle-page .concept-confirmation-actions button:hover:not(:disabled) { transform: none; }
+@media (max-width: 480px) {
+  .doodle-page .concept-confirmation { padding: 34px 22px 22px; }
+  .concept-confirmation-actions { flex-direction: column; }
+  .concept-confirmation-actions button { width: 100%; }
+}

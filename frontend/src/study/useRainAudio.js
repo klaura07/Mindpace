@@ -1,70 +1,59 @@
 import { useEffect, useRef, useState } from "react";
 
-// Locally generated ambience: no download, microphone, or autoplay.
+// User-supplied recording, served locally and started only by a click.
 export default function useRainAudio() {
   const audio = useRef(null);
   const pending = useRef(false);
+  const mounted = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(.25);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => () => {
-    if (audio.current) {
-      audio.current.onstatechange = null;
-      audio.current.close().catch(() => {});
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      const player = audio.current;
       audio.current = null;
-    }
+      if (player) {
+        player.onplaying = player.onpause = player.onerror = null;
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+      }
+    };
   }, []);
-
   async function toggle() {
     if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
-    setError("");
+    pending.current = true; setBusy(true); setError("");
     try {
-      let context = audio.current;
-      if (context?.state === "closed") context = audio.current = null;
-      if (!context) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) throw new Error("Rain sound is not supported in this browser.");
-        context = new AudioContext();
-        audio.current = context;
-        const buffer = context.createBuffer(1, context.sampleRate * 4, context.sampleRate);
-        const samples = buffer.getChannelData(0);
-        for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        const filter = context.createBiquadFilter();
-        filter.type = "lowpass";
-        filter.frequency.value = 1100;
-        const gain = context.createGain();
-        gain.gain.value = volume * .35;
-        source.connect(filter).connect(gain).connect(context.destination);
-        context.rainGain = gain;
-        source.start();
-        context.onstatechange = () => { if (audio.current === context) setPlaying(context.state === "running"); };
-        await context.resume();
-      } else if (context.state === "running") await context.suspend();
-      else await context.resume();
-      if (audio.current === context) setPlaying(context.state === "running");
-    } catch (err) {
-      // Discard a partly initialized graph so the next click really retries audio.
-      const failed = audio.current;
-      audio.current = null;
-      if (failed) {
-        failed.onstatechange = null;
-        if (failed.state !== "closed") await failed.close().catch(() => {});
+      let player = audio.current;
+      if (!player) {
+        player = new Audio(`${import.meta.env.BASE_URL}audio/rain.mp3`);
+        player.loop = true;
+        player.volume = volume;
+        player.preload = "none";
+        player.onplaying = () => { if (mounted.current) setPlaying(true); };
+        player.onpause = () => { if (mounted.current) setPlaying(false); };
+        player.onerror = () => {
+          if (mounted.current) { setPlaying(false); setError("Could not load the rain recording. Please try again."); }
+        };
+        audio.current = player;
       }
-      setPlaying(false);
-      setError(err.message || "Could not start rain sound.");
+      if (player.paused) {
+        if (player.error) player.load();
+        await player.play();
+      } else player.pause();
+    } catch {
+      if (mounted.current) { setPlaying(false); setError("Could not play the rain recording. Please try again."); }
+    } finally {
+      pending.current = false;
+      if (mounted.current) setBusy(false);
     }
-    finally { pending.current = false; setBusy(false); }
   }
   function changeVolume(value) {
     setVolume(value);
-    const context = audio.current;
-    if (context?.rainGain) context.rainGain.gain.setTargetAtTime(value * .35, context.currentTime, .1);
+    if (audio.current) audio.current.volume = value;
   }
   return { playing, volume, error, busy, toggle, changeVolume };
 }

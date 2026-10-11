@@ -2,7 +2,7 @@
 from statistics import median
 
 
-def response_history(conn, user_id, document_id=None, mode=None):
+def response_history(conn, user_id, document_id=None, mode=None, topic=None):
     return [dict(row) for row in conn.execute(
         """SELECT r.*, q.topic, q.difficulty, q.document_id,
                   COALESCE(q.parent_question_id, q.question_id) AS root_id
@@ -10,8 +10,9 @@ def response_history(conn, user_id, document_id=None, mode=None):
            JOIN questions q ON q.question_id = r.question_id
            WHERE s.user_id = ? AND (? IS NULL OR q.document_id = ?)
              AND (? IS NULL OR r.response_mode = ?)
+             AND (? IS NULL OR (q.topic = ? AND q.document_id IS NULL))
            ORDER BY r.response_id DESC LIMIT 200""",
-        (user_id, document_id, document_id, mode, mode),
+        (user_id, document_id, document_id, mode, mode, topic, topic),
     )]
 
 

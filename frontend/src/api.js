@@ -65,7 +65,7 @@ export function getQuestions(topic) {
   return request(`/questions?topic=${encodeURIComponent(topic)}`);
 }
 
-export function createResponse({ sessionId, questionId, answerText, confidence, responseTimeMs, responseMode = "question", recalled }) {
+export function createResponse({ sessionId, questionId, answerText, confidence }) {
   return request("/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -74,9 +74,7 @@ export function createResponse({ sessionId, questionId, answerText, confidence, 
       question_id: questionId,
       answer_text: answerText,
       confidence,
-      response_time_ms: responseTimeMs ?? null,
-      response_mode: responseMode,
-      recalled,
+      response_mode: "question",
     }),
   });
 }
@@ -99,6 +97,26 @@ export function generateQuestions(topic, count = 5) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ topic, count }),
   });
+}
+
+export function listQuestionTopics() {
+  return request("/question-topics");
+}
+
+export function saveStudyTopic(topic) {
+  return request("/study-topics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) });
+}
+
+export function removeStudyTopic(topic) {
+  return request("/study-topics", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) });
+}
+
+export function getTopicQuestions(topic) {
+  return request(`/topic-questions?topic=${encodeURIComponent(topic)}`);
+}
+
+export function getNextTopicQuestion(topic, sessionId) {
+  return request(`/study-topic/next?topic=${encodeURIComponent(topic)}&session_id=${sessionId}`);
 }
 
 export function createJournalEntry(sessionId, entryText) {
@@ -134,6 +152,14 @@ export function generateFromDocument(documentId) {
   return request(`/documents/${documentId}/generate`, { method: "POST" });
 }
 
+export function generateEducationalContent(source) {
+  return request("/educational-content", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(source),
+  });
+}
+
 export function getDocumentQuestions(documentId) {
   return request(`/documents/${documentId}/questions`);
 }
@@ -150,8 +176,8 @@ export function reframeQuestion(questionId) {
   return request(`/questions/${questionId}/reframe`, { method: "POST" });
 }
 
-export function getNextStudyQuestion(documentId, sessionId, mode) {
-  return request(`/study/${documentId}/next?session_id=${sessionId}&mode=${mode}`);
+export function getNextStudyQuestion(documentId, sessionId) {
+  return request(`/study/${documentId}/next?session_id=${sessionId}`);
 }
 
 export function getStudyAnalytics(userId) {
@@ -161,3 +187,11 @@ export function getStudyAnalytics(userId) {
 export function endSession(sessionId) {
   return request(`/sessions/${sessionId}/end`, { method: "POST" });
 }
+
+export const getSpotifyStatus = () => request("/spotify/status");
+export const connectSpotify = () => request("/spotify/connect", { method: "POST" });
+export const completeSpotify = (state, code) => request("/spotify/complete", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, code }),
+});
+export const disconnectSpotify = () => request("/spotify/connection", { method: "DELETE" });
+export const getSpotifyLibrary = (kind, offset = 0) => request(`/spotify/library?kind=${kind}&offset=${offset}`);
