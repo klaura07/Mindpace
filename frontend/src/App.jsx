@@ -6,13 +6,14 @@ import Login from "./pages/Login";
 import Upload from "./pages/Upload";
 import Dashboard from "./pages/Dashboard";
 import Quiz from "./pages/Quiz";
+import StudyTime from "./pages/StudyTime";
 import Review from "./pages/Review";
 import Unwind from "./pages/Unwind";
 import { AuthProvider, RequireAuth } from "./context/AuthContext";
 
 function StudyRedirect() {
   const location = useLocation();
-  return <Navigate to={`/study-time${location.search}`} replace />;
+  return <Navigate to={`/questions${location.search}`} replace />;
 }
 
 function App() {
@@ -28,7 +29,8 @@ function App() {
             <Route path="/upload" element={<Upload />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/quiz" element={<StudyRedirect />} />
-            <Route path="/study-time" element={<Quiz />} />
+            <Route path="/questions" element={<Quiz />} />
+            <Route path="/study-time" element={<StudyTime />} />
             <Route path="/review" element={<Review />} />
             <Route path="/unwind" element={<Navigate to="/activities" replace />} />
             <Route path="/activities" element={<Unwind />} />

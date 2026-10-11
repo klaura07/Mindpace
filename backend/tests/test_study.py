@@ -9,7 +9,7 @@ def setup_study(client, monkeypatch):
     user = signup(client).json()['user_id']
     doc = client.post(f'/documents?user_id={user}', files={'file': ('source.txt', b'Learning material')}).json()['document_id']
     monkeypatch.setattr(main, 'generate_mcqs_from_document', lambda *args, **kwargs: [
-        {'prompt_text': f'Question {i}?', 'options': ['A', 'B', 'C', 'D'], 'correct_answer': 'A', 'difficulty': difficulty}
+        {'prompt_text': f'Question {i}?', 'options': ['A', 'B', 'C', 'D'], 'correct_answer': 'A', 'explanation': 'The governing principle makes A correct; the other choices confuse cause with effect.', 'difficulty': difficulty}
         for i, difficulty in enumerate([1, 1, 2, 2, 3])
     ])
     generated = client.post(f'/documents/{doc}/generate')
@@ -51,19 +51,17 @@ def test_adaptive_flow_retry_and_exhaustion(client, monkeypatch):
     assert client.post('/responses', json=payload).status_code == 409
 
 
-def test_flashcard_recall_is_separate_and_uncertainty_schedules_review(client, monkeypatch):
+def test_removed_flashcards_rejected_and_uncertainty_schedules_review(client, monkeypatch):
     user, doc, session, bank = setup_study(client, monkeypatch)
-    card = client.get(f'/study/{doc}/next?session_id={session}&mode=flashcard').json()['question']
-    assert card['correct_answer'] == 'A'
-    result = client.post('/responses', json={'session_id': session, 'question_id': card['question_id'],
-        'response_mode': 'flashcard', 'recalled': True, 'confidence': .3, 'response_time_ms': 15000})
+    assert client.get(f'/study/{doc}/next?session_id={session}&mode=flashcard').status_code == 422
+    assert client.post('/responses', json={'session_id': session, 'question_id': bank[0]['question_id'],
+        'response_mode': 'flashcard', 'recalled': True, 'confidence': .3}).status_code == 422
+    result = client.post('/responses', json={'session_id': session, 'question_id': bank[0]['question_id'],
+        'answer_text': 'A', 'confidence': .3})
     assert result.status_code == 201, result.text
-    assert result.json()['is_correct'] == 1
-    analytics = client.get(f'/analytics/{user}').json()
-    assert analytics['question']['overall']['attempts'] == 0
-    assert analytics['flashcard']['overall']['accuracy'] == 1
-    assert analytics['flashcard']['overall']['median_response_ms'] == 15000
-    assert client.post(f'/calibration/{user}/compute').status_code == 400
+    assert result.json()['response_time_ms'] is None
+    assert result.json()['explanation'] == bank[0]['explanation']
+    assert set(client.get(f'/analytics/{user}').json()) == {'question'}
     with closing(database.get_connection()) as conn:
         assert conn.execute('SELECT interval_days FROM review_items').fetchone()[0] == 2
 

@@ -5,13 +5,11 @@ import {
   createSession,
   getDueReviewItems,
   getLearningState,
-  reframeQuestion,
   endSession,
 } from "../api";
 import EmptyState from "../components/EmptyState";
 import PlatformPage from "../components/PlatformPage";
 import ConfidenceBar from "../components/ConfidenceBar";
-import useActiveTime from "../study/useActiveTime";
 import "./Study.css";
 
 // Shared adaptive signals include uncertain correct answers as review candidates.
@@ -27,9 +25,7 @@ export default function Review() {
   const [dueError, setDueError] = useState(null);
   const [sessionId, setSessionId] = useState(null);
 
-  // The due item currently being reviewed, and the fresh Gemini-generated
-  // variant of it the user actually answers — "review now" never shows
-  // the original question verbatim.
+  // Reuse the saved question so due reviews do not depend on Gemini quota.
   const [activeItemId, setActiveItemId] = useState(null);
   const [variant, setVariant] = useState(null);
   const [variantLoading, setVariantLoading] = useState(false);
@@ -40,7 +36,6 @@ export default function Review() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [confidence, setConfidence] = useState(.5);
-  const getElapsed = useActiveTime(`${userId}-${sessionId}-${variant?.question_id}`, Boolean(variant) && !feedback && !submitting);
 
 
   useEffect(() => {
@@ -71,10 +66,9 @@ export default function Review() {
     setVariantLoading(true);
 
     try {
-      const fresh = await reframeQuestion(item.question_id);
       const session = await createSession(Number(userId));
       setSessionId(session.session_id);
-      setVariant(fresh);
+      setVariant(item);
     } catch (err) {
       setVariantError(err.message);
     } finally {
@@ -93,7 +87,6 @@ export default function Review() {
         questionId: variant.question_id,
         answerText: selectedAnswer,
         confidence,
-        responseTimeMs: getElapsed(),
       });
       setFeedback(response);
     } catch (err) {
@@ -132,7 +125,7 @@ export default function Review() {
     .filter(({ weakCounts }) => weakCounts.length > 0);
 
   return (
-    <PlatformPage title="Review" eyebrow="Build on what you know"
+    <PlatformPage title="Review"
       description="Past mistakes and weak areas, grouped by topic.">
 
       <section>
@@ -158,7 +151,7 @@ export default function Review() {
 
                 {activeItemId === item.question_id && (
                   <div className="fade-in">
-                    {variantLoading && <p>Generating a fresh variant of this question...</p>}
+                    {variantLoading && <p>Opening your saved review question...</p>}
                     {variantError && <><p role="alert">{variantError}</p><button onClick={() => { setActiveItemId(null); setVariantError(null); }}>Back to due items</button></>}
 
                     {variant && !feedback && (
@@ -166,7 +159,7 @@ export default function Review() {
                         <h3>{variant.prompt_text}</h3>
                         <form onSubmit={submitReview}>
                           {variant.options && variant.options.length > 0 ? (
-                            <fieldset>
+                            <fieldset disabled={submitting}>
                               {variant.options.map((option) => (
                                 <label key={option}>
                                   <input
@@ -187,6 +180,7 @@ export default function Review() {
                               <input
                                 id={`answer-${variant.question_id}`}
                                 type="text"
+                                disabled={submitting}
                                 required
                                 value={selectedAnswer}
                                 onChange={(e) => setSelectedAnswer(e.target.value)}
@@ -206,6 +200,7 @@ export default function Review() {
                         <p>{feedback.is_correct ? "Correct!" : "Incorrect."}</p>
                         <p>Your answer: {feedback.answer_text}</p>
                         <p>Answer: {feedback.correct_answer}</p>
+                        {feedback.explanation && <><h4>Why this works</h4><p>{feedback.explanation}</p></>}
                         <p>{feedback.adaptation?.reason}</p>
                         <button disabled={submitting} onClick={() => finishReview(item.question_id)}>Done</button>
                       </div>

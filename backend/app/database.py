@@ -53,5 +53,10 @@ def init_db() -> None:
             if "document_id" not in {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}:
                 conn.execute("ALTER TABLE questions ADD COLUMN document_id INTEGER REFERENCES documents(document_id) ON DELETE SET NULL")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_questions_document ON questions(document_id)")
+            question_columns = {row["name"] for row in conn.execute("PRAGMA table_info(questions)")}
+            if "explanation" not in question_columns:
+                conn.execute("ALTER TABLE questions ADD COLUMN explanation TEXT")
+            if "is_active" not in question_columns:
+                conn.execute("ALTER TABLE questions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
             if "response_mode" not in {row["name"] for row in conn.execute("PRAGMA table_info(responses)")}:
                 conn.execute("ALTER TABLE responses ADD COLUMN response_mode TEXT NOT NULL DEFAULT 'question'")

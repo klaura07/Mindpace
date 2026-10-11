@@ -13,6 +13,7 @@ import {
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { to: "/upload", label: "Upload", Icon: UploadIcon },
+  { to: "/questions", label: "Questions", Icon: QuizIcon },
   { to: "/study-time", label: "Study time", Icon: QuizIcon },
   { to: "/review", label: "Review", Icon: ReviewIcon },
   { to: "/activities", label: "Activities", Icon: UnwindIcon },

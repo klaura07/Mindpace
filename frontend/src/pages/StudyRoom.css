@@ -2,11 +2,13 @@
 .app-content:has(> .study-room) { padding: 0; }
 .app-shell:has(.study-room) .sidebar { background: #eeeee3; border-right: 1px solid #dbdecd; }
 .study-room { --room-ink: #424d3e; --room-muted: #727766; --room-green: #536b47; color: var(--room-ink); background: #f6f3e9; min-height: 100%; padding-bottom: 18px; text-align: left; font-family: "Tenor Sans", "Segoe UI", sans-serif; }
-.study-room:fullscreen { overflow: auto; }
+
 .study-room *, .study-room *::before { box-sizing: border-box; }
 .study-room h1, .study-room h2, .study-room p { margin: 0; color: inherit; }
 .study-room button { display: inline-flex; align-items: center; justify-content: center; gap: 16px; min-height: 42px; padding: 10px 18px; border: 1px solid #ccd1bc; border-radius: 12px 15px 11px 14px; background: #fcfaf2; color: var(--room-ink); font: inherit; font-size: 13px; box-shadow: none; transition: transform .2s, background .2s; }
-.study-room button:hover:not(:disabled) { background: #edf0df; transform: translateY(-1px); box-shadow: none; }
+.study-room button:hover:not(:disabled) { background: #edf0df; box-shadow: none; }
+.study-room button:hover:not(:disabled), .study-room button:active:not(:disabled) { transform: none; }
+.study-room .room-audio { width: auto; white-space: nowrap; }
 .study-room button:disabled { opacity: .55; cursor: not-allowed; }
 .study-room :is(button, a, input, select):focus-visible { outline: 3px solid #8a9b65; outline-offset: 4px; }
 .study-room .room-primary { background: var(--room-green); color: #fffdf3; border-color: var(--room-green); box-shadow: 2px 3px 0 #344c2c; min-height: 46px; padding: 12px 24px; }
@@ -128,8 +130,8 @@
 @media (max-width: 700px) {
   .room-header { flex-wrap: wrap; padding: 22px 18px 16px; gap: 16px; }
   .study-room h1 { font-size: 26px; }
-  .room-tool span { display: none; }
-  .study-room .room-tool { min-height: 38px; width: 38px; padding: 8px; }
+  .room-tools { flex-wrap: wrap; }
+  .study-room .room-tool { min-height: 38px; width: auto; padding: 8px 11px; white-space: nowrap; }
   .room-scene { height: 420px; }
   .study-room-drawing { width: 900px; max-width: none; height: 420px; left: 50%; transform: translateX(-50%); }
   .room-wall-timer { width: 94%; left: 50%; top: 20px; }
@@ -155,3 +157,43 @@
   .study-room *, .study-room *::before { transition: none !important; }
 }
 @media (max-width: 380px) { .room-clock { font-size: 76px; } .room-rounds { margin-bottom: 16px; } }
+
+.study-room .room-icon { width: 40px; min-height: 40px; padding: 8px; flex-shrink: 0; }
+.study-room .room-tool:hover:not(:disabled) { color: var(--room-ink); }
+.study-room .room-fullscreen-hint { text-align: center; font-size: 12px; padding: 8px 16px; flex-shrink: 0; color: #627354; }
+.room-fullscreen-hint kbd { font: inherit; font-weight: 600; padding: 2px 6px; border: 1px solid #b9c6a6; border-radius: 4px; background: #fffdf6; }
+.study-room:fullscreen { display: flex; flex-direction: column; width: 100%; height: 100dvh; min-height: 0; max-height: 100dvh; padding: 0; overflow: hidden; overscroll-behavior: none; }
+.study-room:fullscreen .room-header, .study-room:fullscreen .room-volume { flex-shrink: 0; }
+.study-room:fullscreen .room-workspace, .study-room:fullscreen .room-footer { display: none; }
+.study-room:fullscreen .room-scene { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
+.study-room:fullscreen .study-room-drawing { width: 100%; height: 100%; left: 0; transform: none; }
+.study-room:fullscreen .room-wall-timer { top: 4%; left: 50%; width: min(94%, 420px); }
+@media (max-width: 600px) {
+  .study-room:fullscreen .study-room-drawing { width: 900px; left: 50%; transform: translateX(-50%); }
+}
+@media (max-height: 600px) {
+  .study-room:fullscreen .room-header { padding: 8px 18px; gap: 8px; }
+  .study-room:fullscreen h1 { font-size: 22px; }
+  .study-room:fullscreen .room-volume { padding: 4px 18px; }
+  .study-room:fullscreen .room-handwritten { font-size: 13px; margin-bottom: 4px; }
+  .study-room:fullscreen .room-clock { font-size: clamp(44px, 13vh, 76px); }
+  .study-room:fullscreen .room-rounds { margin-bottom: 6px; }
+  .study-room:fullscreen .room-primary { min-height: 36px; padding: 8px 16px; }
+  .study-room:fullscreen .room-fullscreen-hint { padding: 4px; }
+}
+
+.study-room .room-tool[hidden] { display: none; }
+.room-music-dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); margin: auto; padding: 26px; border: 1px solid #cdd3bd; border-radius: 9px 15px 11px 17px; background: #fffdf6; color: #424d3e; box-shadow: 5px 6px 0 #b9c5a780; text-align: left; }
+.room-music-dialog::backdrop { background: #303e3266; backdrop-filter: blur(3px); }
+.room-music-heading { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 18px; }
+.room-music-dialog p { font-size: 13px; line-height: 1.7; margin: 14px 0; }
+.room-music-dialog [role=alert] { padding: 12px; background: #f6e5d9; border-radius: 8px; }
+.room-music-tabs { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.room-music-tabs [aria-pressed=true] { background: #dce5ce; border-color: #839772; }
+.room-music-list { padding: 0; margin: 18px 0; list-style: none; display: grid; gap: 10px; }
+.room-music-list button { width: 100%; text-align: left; flex-direction: column; align-items: flex-start; gap: 4px; overflow-wrap: anywhere; }
+.room-music-list small { color: #727766; }
+.study-room .room-music-note { font-size: 12px; color: #727766; }
+.study-room section.room-selected-music { margin-top: 26px; }
+.room-selected-music iframe { display: block; border: 0; border-radius: 12px; max-width: 100%; margin-top: 16px; }
+.room-selected-music a { color: #536b47; align-self: center; font-size: 13px; }

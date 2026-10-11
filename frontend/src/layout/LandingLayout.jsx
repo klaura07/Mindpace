@@ -15,7 +15,6 @@ export default function LandingLayout() {
         <nav className="landing-nav-links">
           <a href="#about">About</a>
           <a href="#features">Features</a>
-          <a href="#reviews">Reviews</a>
         </nav>
         <div className="landing-nav-cta">
           {!loading && (user ? (

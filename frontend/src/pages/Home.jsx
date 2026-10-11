@@ -13,7 +13,7 @@ const FEATURES = [
   {
     Icon: UploadIcon,
     title: "Upload",
-    description: "Turn your documents into practice questions and flashcards.",
+    description: "Turn your documents into practice conceptual questions.",
   },
   {
     Icon: QuizIcon,
@@ -34,27 +34,6 @@ const FEATURES = [
     Icon: UnwindIcon,
     title: "Activities",
     description: "A separate space for quiet breaks. Activities are being chosen.",
-  },
-];
-
-const TESTIMONIALS = [
-  {
-    quote:
-      "I stopped re-reading the same notes forever. MindPace showed me exactly which topics I only thought I understood.",
-    name: "Amara",
-    role: "Computer Science student",
-  },
-  {
-    quote:
-      "Rating my own confidence before every answer changed how I study. I catch overconfidence early now, not on exam day.",
-    name: "Devon",
-    role: "Medical student",
-  },
-  {
-    quote:
-      "The review sessions are grouped by topic, so I'm never guessing what to revise next. It just tells me.",
-    name: "Priya",
-    role: "Self-taught developer",
   },
 ];
 
@@ -83,7 +62,7 @@ export default function Home() {
         <div className="hero-copy">
           <h1>Learn with intention.</h1>
           <p>
-            MindPace turns your notes into questions and flashcards, tracks what you actually know, and helps you
+            MindPace turns your notes into conceptual questions, tracks what you actually know, and helps you
             focus your revision where it matters most.
           </p>
           <Link to={user ? "/dashboard" : "/login"} className="btn-solid btn-lg">
@@ -118,7 +97,7 @@ export default function Home() {
       <section className="about" id="about">
         <h2>About MindPace</h2>
         <p>
-          MindPace helps you practice with questions and flashcards. Upload your material, test
+          MindPace helps you practice with conceptual questions. Upload your material, test
           yourself on it, and rate your own confidence as you go. We compare what you believe you
           know against what you actually get right, so you always know where to focus next.
         </p>
@@ -142,27 +121,7 @@ export default function Home() {
         </ul>
       </section>
 
-      <WaveDivider top="var(--bg)" bottom="var(--accent-deep)" />
-
-      <section className="reviews" id="reviews">
-        <h2>What learners say</h2>
-        <ul className="testimonial-grid">
-          {TESTIMONIALS.map(({ quote, name, role }) => (
-            <li key={name} className="testimonial-card">
-              <p>&ldquo;{quote}&rdquo;</p>
-              <div className="testimonial-person">
-                <span className="testimonial-avatar">{name[0]}</span>
-                <span>
-                  <strong>{name}</strong>
-                  <span className="testimonial-role">{role}</span>
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <WaveDivider top="var(--accent-deep)" bottom="var(--bg-elevated)" />
+      <WaveDivider top="var(--bg)" bottom="var(--bg-elevated)" />
 
       <footer className="landing-footer">
         <div className="landing-footer-brand">
@@ -184,7 +143,6 @@ export default function Home() {
           <strong>Company</strong>
           <a href="#about">About</a>
           <a href="#features">Features</a>
-          <a href="#reviews">Reviews</a>
         </div>
         <div className="landing-footer-bottom">© 2026 MindPace</div>
       </footer>

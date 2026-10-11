@@ -1,0 +1,99 @@
+import base64
+import hashlib
+import time
+from urllib.parse import parse_qs, urlsplit
+from unittest.mock import Mock
+
+import pytest
+from fastapi import HTTPException
+from app import spotify
+from test_auth import client, signup
+
+
+@pytest.fixture(autouse=True)
+def clean_spotify(monkeypatch):
+    spotify._pending.clear()
+    spotify._connections.clear()
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "a" * 32)
+    monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:5173/spotify-callback.html")
+    yield
+    spotify._pending.clear()
+    spotify._connections.clear()
+
+
+def link(client, monkeypatch):
+    signup(client)
+    start = client.post("/spotify/connect").json()
+    mock = Mock(return_value={"access_token": "private-access", "refresh_token": "private-refresh", "expires_in": 3600})
+    monkeypatch.setattr(spotify, "_request", mock)
+    response = client.post("/spotify/complete", json={"state": start["state"], "code": "one-use-code"})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"connected": True}
+    return mock, start
+
+
+def test_pkce_connection_state_is_bound_to_login_and_single_use(client, monkeypatch):
+    mock, start = link(client, monkeypatch)
+    query = parse_qs(urlsplit(start["authorize_url"]).query)
+    data = mock.call_args.kwargs["data"]
+    assert query["code_challenge_method"] == ["S256"]
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(data["code_verifier"].encode()).digest()).decode().rstrip("=")
+    assert query["code_challenge"] == [challenge]
+    assert query["redirect_uri"] == [data["redirect_uri"]]
+    assert "client_secret" not in data
+    assert "token" not in str(client.get("/spotify/status").json())
+    assert client.get("/spotify/status").json()["connected"] is True
+    assert client.post("/spotify/complete", json={"state": start["state"], "code": "one-use-code"}).status_code == 400
+    second = client.post("/spotify/connect").json()
+    client.post("/auth/logout")
+    signup(client, "other-spotify@example.com")
+    assert client.get("/spotify/status").json()["connected"] is False
+    assert client.post("/spotify/complete", json={"state": second["state"], "code": "stolen-state"}).status_code == 400
+    assert client.get("/spotify/library").status_code == 409
+    mock.assert_called_once()
+
+
+def test_library_refresh_pagination_and_disconnect(client, monkeypatch):
+    mock, _ = link(client, monkeypatch)
+    connection = next(iter(spotify._connections.values()))
+    connection["expires_at"] = 0
+    mock.side_effect = [
+        {"access_token": "refreshed-access", "expires_in": 3600},
+        {"items": [{"id": "b" * 22, "name": "My rain", "owner": {"display_name": "Me"}}, None, {"id": "bad/path"}], "next": "next-page"},
+        {"items": [{"track": {"id": "c" * 22, "name": "My song", "artists": [{"name": "Artist"}]}}, {"track": None}], "next": None},
+    ]
+    playlists = client.get("/spotify/library").json()
+    assert playlists == {"items": [{"id": "b" * 22, "name": "My rain", "subtitle": "Me", "type": "playlist"}], "next_offset": 20}
+    assert next(iter(spotify._connections.values()))["refresh_token"] == "private-refresh"
+    assert mock.call_args.kwargs["token"] == "refreshed-access"
+    tracks = client.get("/spotify/library?kind=tracks&offset=20").json()
+    assert tracks["items"][0]["type"] == "track"
+    assert tracks["items"][0]["subtitle"] == "Artist"
+    assert tracks["next_offset"] is None
+    assert mock.call_args.args[0] == "https://api.spotify.com/v1/me/tracks?limit=20&offset=20"
+    assert client.delete("/spotify/connection").status_code == 204
+    assert client.get("/spotify/status").json()["connected"] is False
+    assert client.get("/spotify/library").status_code == 409
+
+
+def test_missing_config_expired_state_auth_and_invalid_query(client, monkeypatch):
+    assert client.post("/spotify/connect").status_code == 401
+    signup(client)
+    assert client.get("/spotify/library?kind=arbitrary").status_code == 422
+    assert client.get("/spotify/library?offset=-1").status_code == 422
+    start = client.post("/spotify/connect").json()
+    spotify._pending[start["state"]]["deadline"] = time.time() - 1
+    assert client.post("/spotify/complete", json={"state": start["state"], "code": "expired"}).status_code == 400
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "")
+    assert client.get("/spotify/status").json() == {"configured": False, "connected": False}
+    assert client.post("/spotify/connect").status_code == 503
+
+
+def test_rejected_refresh_disconnects_and_does_not_expose_tokens(client, monkeypatch):
+    mock, _ = link(client, monkeypatch)
+    next(iter(spotify._connections.values()))["expires_at"] = 0
+    mock.side_effect = HTTPException(409, "Please reconnect Spotify")
+    response = client.get("/spotify/library")
+    assert response.status_code == 409
+    assert "private" not in response.text
+    assert client.get("/spotify/status").json()["connected"] is False

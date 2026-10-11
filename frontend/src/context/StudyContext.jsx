@@ -3,30 +3,33 @@ import { useAuth } from "./AuthContext";
 import { newTimer, tickTimer } from "../study/timer";
 
 const StudyContext = createContext(null);
+function read(key, fallback) {
+  try { return JSON.parse(sessionStorage.getItem(key)) || fallback; } catch { return fallback; }
+}
+function save(key, value) {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* In-memory fallback. */ }
+}
 
 export function StudyProvider({ children }) {
   const { user } = useAuth();
-  const key = `mindpace-study-${user.user_id}`;
-  const [study, setStudy] = useState(() => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(key));
-      if (saved?.version === 1 && saved.timer) return { ...saved, timer: tickTimer(saved.timer, Date.now()) };
-    } catch { /* Storage may be unavailable. The session still works in memory. */ }
-    return { version: 1, sessionId: null, timer: newTimer(), question: null, mode: "question", answered: 0 };
+  const practiceKey = `mindpace-questions-${user.user_id}`;
+  const focusKey = `mindpace-focus-${user.user_id}`;
+  const [practices, setPractices] = useState(() => read(practiceKey, {}));
+  const [focus, setFocus] = useState(() => {
+    const saved = read(focusKey, { timer: newTimer(), source: "", title: "Your own study" });
+    return { ...saved, timer: tickTimer(saved.timer, Date.now()) };
   });
+  useEffect(() => save(practiceKey, practices), [practiceKey, practices]);
+  useEffect(() => save(focusKey, focus), [focusKey, focus]);
   useEffect(() => {
-    try { sessionStorage.setItem(key, JSON.stringify(study)); } catch { /* In-memory fallback. */ }
-  }, [key, study]);
-  useEffect(() => {
-    const id = setInterval(() => setStudy((s) => {
-      const timer = tickTimer(s.timer, Date.now());
-      return timer === s.timer ? s : { ...s, timer };
+    const id = setInterval(() => setFocus(state => {
+      const timer = tickTimer(state.timer, Date.now());
+      return timer === state.timer ? state : { ...state, timer };
     }), 500);
     return () => clearInterval(id);
   }, []);
-  return <StudyContext.Provider value={{ study, setStudy }}>{children}</StudyContext.Provider>;
+  return <StudyContext.Provider value={{ practices, setPractices, focus, setFocus }}>{children}</StudyContext.Provider>;
 }
 
-// Context consumers share the module, as with AuthContext.
 // oxlint-disable-next-line react/only-export-components
 export function useStudy() { return useContext(StudyContext); }

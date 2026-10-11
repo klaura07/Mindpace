@@ -16,7 +16,7 @@ export default function Login() {
   const location = useLocation();
   const { user, loading, acceptUser } = useAuth();
   const from = location.state?.from;
-  const destination = ["/dashboard", "/upload", "/quiz", "/study-time", "/review", "/unwind", "/activities"].includes(from) ? from : "/dashboard";
+  const destination = ["/dashboard", "/upload", "/quiz", "/questions", "/study-time", "/review", "/unwind", "/activities"].includes(from) ? from : "/dashboard";
 
   async function handleSubmit(e) {
     e.preventDefault();

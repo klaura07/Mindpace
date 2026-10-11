@@ -4,7 +4,6 @@ import AssistantWidget from "../components/AssistantWidget";
 import { StudyProvider, useStudy } from "../context/StudyContext";
 import { AssistantSessionProvider } from "../context/AssistantSessionContext";
 import { useAuth } from "../context/AuthContext";
-import { RoomMotionProvider, useRoomMotion } from "../context/RoomMotionContext";
 import "./PlatformTheme.css";
 import "./DoodleTheme.css";
 
@@ -13,16 +12,16 @@ const ASSISTANT_ROUTES = new Set(["/dashboard"]);
 
 function LayoutAssistant() {
   const location = useLocation();
-  const { study } = useStudy();
+  const { practices } = useStudy();
   const { user } = useAuth();
   if (!user) return null;
   if (!ASSISTANT_ROUTES.has(location.pathname)) return null;
-  return <AssistantWidget sessionId={study.sessionId} />;
+  const recentSession = Math.max(0, ...Object.values(practices).map(item => item.sessionId || 0));
+  return <AssistantWidget sessionId={recentSession || null} />;
 }
 
 function AppFrame() {
-  const { still } = useRoomMotion();
-  return <div className={`app-shell doodle-app ${still ? "motion-paused" : "motion-enabled"}`}>
+  return <div className="app-shell doodle-app motion-enabled">
         <Sidebar />
         <main className="app-content">
           <Outlet />
@@ -36,7 +35,7 @@ export default function AppLayout() {
   return (
     <AssistantSessionProvider key={user?.user_id ?? "anonymous"}>
       <StudyProvider>
-        <RoomMotionProvider><AppFrame /></RoomMotionProvider>
+        <AppFrame />
       </StudyProvider>
     </AssistantSessionProvider>
   );

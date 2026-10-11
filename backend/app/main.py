@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from app.auth import (ALLOWED_ORIGINS, current_user, require_auth, require_owner,
                       require_question_access, require_session_owner, router as auth_router)
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app.database import get_connection, init_db
 from app.gemini import (
@@ -36,11 +37,13 @@ from app.models import (
     CalibrationScoreOut,
     DocumentGenerateResponse,
     DocumentOut,
+    GeneratedQuestion,
     JournalEntryCreate,
     JournalEntryOut,
     LearningStateTopicCounts,
     QuestionCreate,
     QuestionGenerateRequest,
+    TopicCreate,
     QuestionOut,
     ResponseCreate,
     ResponseOut,
@@ -50,6 +53,8 @@ from app.models import (
     UserOut,
 )
 from app.text_extraction import extract_text
+from app.educational_content import router as educational_content_router
+from app.spotify import router as spotify_router
 
 
 @asynccontextmanager
@@ -62,6 +67,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MindPace API", lifespan=lifespan, dependencies=[Depends(require_auth)])
 app.include_router(auth_router)
+app.include_router(educational_content_router)
+app.include_router(spotify_router)
 
 
 @app.middleware("http")
@@ -115,6 +122,15 @@ def _row_to_question(row) -> dict:
     return data
 
 
+def _validate_question_bank(generated):
+    try:
+        if not isinstance(generated, list) or not generated:
+            raise ValueError("Empty question bank")
+        return [GeneratedQuestion.model_validate(item).model_dump() for item in generated]
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Gemini returned incomplete questions. Please try generating again.") from exc
+
+
 @app.post("/questions", response_model=QuestionOut, status_code=201)
 def create_question(question: QuestionCreate, user: dict = Depends(current_user)):
     if question.parent_question_id is not None:
@@ -151,25 +167,31 @@ def create_question(question: QuestionCreate, user: dict = Depends(current_user)
 
 @app.post("/questions/generate", response_model=list[QuestionOut], status_code=201)
 def generate_questions(request: QuestionGenerateRequest, user: dict = Depends(current_user)):
+    existing = topic_questions(request.topic, user)
+    if existing and all(q.get("explanation") for q in existing):
+        return existing
     try:
-        generated = generate_mcqs(request.topic, request.count)
+        generated = _validate_question_bank(generate_mcqs(request.topic, request.count))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
     conn = get_connection()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("UPDATE questions SET is_active = 0 WHERE owner_user_id = ? AND topic = ? AND document_id IS NULL AND parent_question_id IS NULL", (user["user_id"], request.topic))
         created = []
         for q in generated:
             cursor = conn.execute(
                 """INSERT INTO questions
-                   (owner_user_id, topic, prompt_text, question_type, options, correct_answer, difficulty)
-                   VALUES (?, ?, ?, 'mcq', ?, ?, ?)""",
+                   (owner_user_id, topic, prompt_text, question_type, options, correct_answer, explanation, difficulty)
+                   VALUES (?, ?, ?, 'mcq', ?, ?, ?, ?)""",
                 (
                     user["user_id"],
                     request.topic,
                     q["prompt_text"],
                     json.dumps(q["options"]),
                     q["correct_answer"],
+                    q["explanation"],
                     q["difficulty"],
                 ),
             )
@@ -182,6 +204,60 @@ def generate_questions(request: QuestionGenerateRequest, user: dict = Depends(cu
     except (sqlite3.IntegrityError, KeyError) as e:
         conn.rollback()
         raise HTTPException(status_code=502, detail=f"Malformed question from Gemini: {e}")
+    finally:
+        conn.close()
+
+
+@app.post("/study-topics", status_code=201)
+def save_study_topic(request: TopicCreate, user: dict = Depends(current_user)):
+    conn = get_connection()
+    try:
+        conn.execute("INSERT OR IGNORE INTO study_topics (user_id, topic) VALUES (?, ?)",
+                     (user["user_id"], request.topic))
+        conn.execute("DELETE FROM hidden_study_topics WHERE user_id = ? AND topic = ?",
+                     (user["user_id"], request.topic))
+        conn.commit()
+        return {"topic": request.topic}
+    finally:
+        conn.close()
+
+
+@app.delete("/study-topics", status_code=204)
+def remove_study_topic(request: TopicCreate, user: dict = Depends(current_user)):
+    conn = get_connection()
+    try:
+        conn.execute("INSERT OR IGNORE INTO hidden_study_topics (user_id, topic) VALUES (?, ?)",
+                     (user["user_id"], request.topic))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.get("/question-topics")
+def question_topics(user: dict = Depends(current_user)):
+    conn = get_connection()
+    try:
+        return [dict(row) for row in conn.execute(
+            """SELECT t.topic, COUNT(q.question_id) AS question_count FROM
+               (SELECT topic FROM study_topics WHERE user_id = ? UNION
+                SELECT topic FROM questions WHERE owner_user_id = ? AND document_id IS NULL) t
+               LEFT JOIN questions q ON q.topic = t.topic AND q.owner_user_id = ?
+                 AND q.document_id IS NULL AND q.parent_question_id IS NULL AND q.is_active = 1
+               WHERE NOT EXISTS (SELECT 1 FROM hidden_study_topics h
+                                 WHERE h.user_id = ? AND h.topic = t.topic)
+               GROUP BY t.topic ORDER BY t.topic""", (user["user_id"],) * 4)]
+    finally:
+        conn.close()
+
+
+@app.get("/topic-questions", response_model=list[QuestionOut])
+def topic_questions(topic: str, user: dict = Depends(current_user)):
+    conn = get_connection()
+    try:
+        return [_row_to_question(row) for row in conn.execute(
+            """SELECT * FROM questions WHERE topic = ? AND owner_user_id = ?
+               AND document_id IS NULL AND parent_question_id IS NULL AND is_active = 1 ORDER BY question_id""",
+            (topic, user["user_id"]))]
     finally:
         conn.close()
 
@@ -232,15 +308,15 @@ def reframe_question(question_id: int, user: dict = Depends(current_user)):
 
         original_dict = _row_to_question(original)
         try:
-            variant = generate_question_variant(original_dict)
+            variant = _validate_question_bank([generate_question_variant(original_dict)])[0]
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
 
         cursor = conn.execute(
             """INSERT INTO questions
                (owner_user_id, document_id, topic, prompt_text, question_type, options, correct_answer,
-                difficulty, parent_question_id)
-               VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?, ?)""",
+                difficulty, explanation, parent_question_id)
+               VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?, ?, ?)""",
             (
                 user["user_id"],
                 original_dict.get("document_id"),
@@ -249,6 +325,7 @@ def reframe_question(question_id: int, user: dict = Depends(current_user)):
                 json.dumps(variant["options"]),
                 variant["correct_answer"],
                 variant["difficulty"],
+                variant["explanation"],
                 question_id,
             ),
         )
@@ -359,11 +436,10 @@ def create_response(response: ResponseCreate, user: dict = Depends(current_user)
             # Network retries must not create duplicate learning evidence.
             if (existing["response_mode"] != response.response_mode or
                     existing["answer_text"] != response.answer_text or
-                    existing["confidence"] != response.confidence or
-                    (response.response_mode == "flashcard" and existing["is_correct"] != int(response.recalled))):
+                    existing["confidence"] != response.confidence):
                 raise HTTPException(status_code=409, detail="This question already has a saved answer in this session.")
-            return {**dict(existing), "correct_answer": question["correct_answer"],
-                    "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], existing["response_mode"]))}
+            return {**dict(existing), "correct_answer": question["correct_answer"], "explanation": question["explanation"],
+                    "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], existing["response_mode"], question["topic"] if question["document_id"] is None else None))}
 
         is_correct = int(
             question["correct_answer"] is not None
@@ -371,9 +447,7 @@ def create_response(response: ResponseCreate, user: dict = Depends(current_user)
             and response.answer_text.strip().lower()
             == question["correct_answer"].strip().lower()
         )
-        if response.response_mode == "flashcard":
-            is_correct = int(response.recalled)
-        history = response_history(conn, user["user_id"], question["document_id"], response.response_mode)
+        history = response_history(conn, user["user_id"], question["document_id"], response.response_mode, question["topic"] if question["document_id"] is None else None)
         timings = [r["response_time_ms"] for r in history
                    if r["difficulty"] == question["difficulty"] and r["response_time_ms"]][:20]
         typical_ms = median(timings) if len(timings) >= 5 else None
@@ -403,8 +477,8 @@ def create_response(response: ResponseCreate, user: dict = Depends(current_user)
         row = conn.execute(
             "SELECT * FROM responses WHERE response_id = ?", (cursor.lastrowid,)
         ).fetchone()
-        return {**dict(row), "correct_answer": question["correct_answer"],
-                "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], response.response_mode))}
+        return {**dict(row), "correct_answer": question["correct_answer"], "explanation": question["explanation"],
+                "adaptation": signals(response_history(conn, user["user_id"], question["document_id"], response.response_mode, question["topic"] if question["document_id"] is None else None))}
     except sqlite3.IntegrityError as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
@@ -558,6 +632,9 @@ async def upload_document(user_id: int, file: UploadFile = File(...), user: dict
         # otherwise escape as an unhandled 500.
         raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
 
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="This file has no readable text. Use a text-based PDF, DOCX, or TXT; scanned pages need OCR first.")
+
     conn = get_connection()
     try:
         user = conn.execute(
@@ -598,7 +675,9 @@ def list_documents(user_id: int, user: dict = Depends(current_user)):
     require_owner(user, user_id)
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM documents WHERE user_id = ? ORDER BY document_id",
+        """SELECT d.*, (SELECT COUNT(*) FROM questions q WHERE q.document_id = d.document_id
+            AND q.owner_user_id = d.user_id AND q.parent_question_id IS NULL AND q.is_active = 1) AS question_count
+            FROM documents d WHERE user_id = ? ORDER BY document_id""",
         (user_id,),
     ).fetchall()
     conn.close()
@@ -616,7 +695,7 @@ def document_questions(document_id: int, user: dict = Depends(current_user)):
             raise HTTPException(status_code=404, detail="Document not found")
         require_owner(user, document["user_id"])
         rows = conn.execute(
-            "SELECT * FROM questions WHERE document_id = ? AND owner_user_id = ? AND parent_question_id IS NULL ORDER BY question_id",
+            "SELECT * FROM questions WHERE document_id = ? AND owner_user_id = ? AND parent_question_id IS NULL AND is_active = 1 ORDER BY question_id",
             (document_id, user["user_id"]),
         ).fetchall()
         return [_row_to_question(row) for row in rows]
@@ -634,6 +713,11 @@ def generate_from_document(document_id: int, user: dict = Depends(current_user))
         if document is None:
             raise HTTPException(status_code=404, detail="Document not found")
         require_owner(user, document["user_id"])
+        existing = conn.execute(
+            "SELECT * FROM questions WHERE document_id = ? AND owner_user_id = ? AND parent_question_id IS NULL AND is_active = 1 ORDER BY question_id",
+            (document_id, user["user_id"])).fetchall()
+        if existing and all(row["explanation"] for row in existing):
+            return {"questions": [_row_to_question(row) for row in existing]}
         if not document["extracted_text"] or not document["extracted_text"].strip():
             raise HTTPException(
                 status_code=400, detail="Document has no extracted text to generate from"
@@ -643,16 +727,18 @@ def generate_from_document(document_id: int, user: dict = Depends(current_user))
         topic = document["filename"].rsplit(".", 1)[0]
 
         try:
-            generated = generate_mcqs_from_document(document_text, count=5)
+            generated = _validate_question_bank(generate_mcqs_from_document(document_text, count=5))
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("UPDATE questions SET is_active = 0 WHERE document_id = ? AND owner_user_id = ? AND parent_question_id IS NULL", (document_id, user["user_id"]))
         created = []
         for q in generated:
             cursor = conn.execute(
                 """INSERT INTO questions
-                   (owner_user_id, document_id, topic, prompt_text, question_type, options, correct_answer, difficulty)
-                   VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?)""",
+                   (owner_user_id, document_id, topic, prompt_text, question_type, options, correct_answer, explanation, difficulty)
+                   VALUES (?, ?, ?, ?, 'mcq', ?, ?, ?, ?)""",
                 (
                     user["user_id"],
                     document_id,
@@ -660,6 +746,7 @@ def generate_from_document(document_id: int, user: dict = Depends(current_user))
                     q["prompt_text"],
                     json.dumps(q["options"]),
                     q["correct_answer"],
+                    q["explanation"],
                     q["difficulty"],
                 ),
             )
@@ -679,25 +766,44 @@ def generate_from_document(document_id: int, user: dict = Depends(current_user))
 
 @app.get("/study/{document_id}/next")
 def next_study_question(document_id: int, session_id: int,
-                        mode: Literal["question", "flashcard"] = "question",
+                        mode: Literal["question"] = "question",
                         user: dict = Depends(current_user)):
+    return _next_practice_question(user, session_id, mode, document_id=document_id)
+
+
+@app.get("/study-topic/next")
+def next_topic_question(topic: str, session_id: int,
+                        mode: Literal["question"] = "question",
+                        user: dict = Depends(current_user)):
+    return _next_practice_question(user, session_id, mode, topic=topic)
+
+
+def _next_practice_question(user, session_id, mode, document_id=None, topic=None):
     require_session_owner(user, session_id)
     conn = get_connection()
     try:
-        document = conn.execute("SELECT * FROM documents WHERE document_id = ?", (document_id,)).fetchone()
-        if document is None:
-            raise HTTPException(status_code=404, detail="Document not found")
-        require_owner(user, document["user_id"])
+        if document_id is not None:
+            document = conn.execute("SELECT * FROM documents WHERE document_id = ?", (document_id,)).fetchone()
+            if document is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            require_owner(user, document["user_id"])
+            source_filter, source_value = "q.document_id = ?", document_id
+        else:
+            source_filter, source_value = "q.document_id IS NULL AND q.topic = ?", topic
+            if not conn.execute(
+                "SELECT 1 FROM questions WHERE owner_user_id = ? AND document_id IS NULL AND topic = ? AND parent_question_id IS NULL",
+                (user["user_id"], topic)).fetchone():
+                raise HTTPException(status_code=404, detail="Topic question bank not found")
         session = conn.execute("SELECT end_time FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         if session["end_time"]:
             raise HTTPException(status_code=409, detail="This study session has ended.")
-        history = response_history(conn, user["user_id"], document_id, mode)
+        history = response_history(conn, user["user_id"], document_id, mode, topic)
         profile = signals(history)
         questions = [dict(row) for row in conn.execute(
-            """SELECT * FROM questions q WHERE document_id = ? AND owner_user_id = ?
-               AND parent_question_id IS NULL AND NOT EXISTS
+            f"""SELECT * FROM questions q WHERE {source_filter} AND owner_user_id = ?
+               AND parent_question_id IS NULL AND is_active = 1 AND NOT EXISTS
                (SELECT 1 FROM responses r WHERE r.question_id = q.question_id AND r.session_id = ?)""",
-            (document_id, user["user_id"], session_id))]
+            (source_value, user["user_id"], session_id))]
         due = {row[0] for row in conn.execute(
             "SELECT question_id FROM review_items WHERE user_id = ? AND next_review_date <= datetime('now')",
             (user["user_id"],))}
@@ -707,6 +813,7 @@ def next_study_question(document_id: int, session_id: int,
             if mode == "question":
                 selected.pop("correct_answer", None)
                 selected.pop("reference_answer", None)
+                selected.pop("explanation", None)
         return {"question": selected, "remaining": len(questions), "adaptation": profile}
     finally:
         conn.close()
@@ -717,9 +824,9 @@ def study_analytics(user_id: int, user: dict = Depends(current_user)):
     require_owner(user, user_id)
     conn = get_connection()
     try:
-        # Separate scored answers from self-reported recall, including their pace baselines.
+        # Historical recall records remain stored, but are excluded from active analytics.
         profiles = {}
-        for mode in ("question", "flashcard"):
+        for mode in ("question",):
             history = response_history(conn, user_id, mode=mode)
             topics = {}
             for row in history:

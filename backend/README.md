@@ -23,7 +23,7 @@ prompt when it's active).
 
 ## What's here so far
 
-- `db/schema.sql` — the 8-table schema
+- `db/schema.sql` — the application schema
 - `app/database.py` — SQLite connection + startup init
 - `app/models.py` — request/response validation
 - `app/main.py` — authenticated application endpoints
@@ -33,6 +33,15 @@ prompt when it's active).
 server — it's not in this zip.
 
 ## Gemini configuration
+
+Topic and document question banks use structured text generation without Google
+Search. Conceptual banks with explanations are reused, including scheduled reviews. Keep the Google project on the
+free tier; model settings alone do not cap charges on a billed project. Free
+rate limits still apply. The retained optional notes endpoint also defaults to no search,
+but the interface separates conceptual questions from independent Pomodoro study.
+Flashcards are removed from the current API and UI; historical records remain intact.
+`GEMINI_SEARCH_GROUNDING=true` explicitly enables search for deployments with
+an appropriate allowance; leave this unset or `false` for this free setup.
 
 Set `GOOGLE_API_KEY` in `backend/.env`. Optional `GEMINI_MODEL` selects the
 primary model (default `gemini-3.6-flash`). Temporary upstream errors are retried
@@ -88,3 +97,37 @@ databases and mocked AI calls; they do not modify application data.
 
 References: [OWASP password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
 and [CSRF custom headers](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#employing-custom-request-headers-for-ajaxapi).
+
+## Independent learning paths
+
+`POST /study-topics` saves a concept without a Gemini call. `GET /question-topics`
+includes saved concepts with zero questions. The frontend generates a bank only
+when the learner chooses Dive In. Study time uses no question or session API.
+
+Generated questions require a reasoning explanation and four distinct options.
+Startup adds `questions.explanation`, `questions.is_active`, and `study_topics`.
+When an older bank lacks explanations, generation archives it and saves a new
+conceptual bank atomically, preserving response history. A generation or validation
+failure leaves the existing bank intact. Next-question responses withhold answers
+and explanations until submission. New answers use question mode only and the
+frontend sends no response timing. Historical timing columns remain compatible.
+
+## Spotify account connection
+
+Set `SPOTIFY_CLIENT_ID` and `SPOTIFY_REDIRECT_URI` (local default:
+`http://127.0.0.1:5173/spotify-callback.html`) in `.env`. Register the exact
+redirect in Spotify's developer app settings. No Client Secret is used.
+`POST /spotify/connect` begins PKCE; `POST /spotify/complete` exchanges the
+single-use state and authorization code in the initiating authenticated session.
+The callback page passes the code only to the app origin (plus localhost when
+using its numeric loopback equivalent); the opener validates origin, popup,
+and state. GET `/spotify/library` fetches the connected learner's playlists or
+saved tracks, paginated, using read-only scopes. DELETE `/spotify/connection`
+drops the current session's connection.
+
+Access and refresh tokens remain in server memory, never API responses or logs.
+The local single-worker server refreshes access tokens as needed. Restarting
+it or logging into a new MindPace session requires reconnecting Spotify. Expired
+connections and pending login states are pruned. Multi-worker hosting would need
+a shared encrypted token store before deployment. Spotify development-user and
+Premium requirements still apply independently of the free local rain recording.
