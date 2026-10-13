@@ -195,3 +195,8 @@ export const completeSpotify = (state, code) => request("/spotify/complete", {
 });
 export const disconnectSpotify = () => request("/spotify/connection", { method: "DELETE" });
 export const getSpotifyLibrary = (kind, offset = 0) => request(`/spotify/library?kind=${kind}&offset=${offset}`);
+export const searchSpotify = (q, kind = "track", offset = 0) => request(`/spotify/search?q=${encodeURIComponent(q)}&kind=${kind}&offset=${offset}`);
+export const getSpotifyPlayback = () => request("/spotify/playback");
+export const controlSpotify = (command) => request("/spotify/playback", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command),
+});

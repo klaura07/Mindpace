@@ -44,9 +44,9 @@ Flashcards are removed from the current API and UI; historical records remain in
 an appropriate allowance; leave this unset or `false` for this free setup.
 
 Set `GOOGLE_API_KEY` in `backend/.env`. Optional `GEMINI_MODEL` selects the
-primary model (default `gemini-3.6-flash`). Temporary upstream errors are retried
+primary model (default `gemini-3.1-flash-lite`). Temporary upstream errors and timeouts are retried
 after one second, then after two seconds using `GEMINI_FALLBACK_MODEL` (default
-`gemini-3.5-flash`). There are at most three attempts per generation call.
+`gemini-3.6-flash`). There are at most three attempts per generation call.
 Set `GEMINI_FALLBACK_MODEL=` to retry only the primary model. Restart the backend
 after changing these settings. Invalid keys and quota errors are not retried.
 

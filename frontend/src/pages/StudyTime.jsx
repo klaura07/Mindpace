@@ -24,7 +24,6 @@ export default function StudyTime() {
   const [attempt, setAttempt] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [fullScreenError, setFullScreenError] = useState(null);
-  const [music, setMusic] = useState(null);
   const room = useRef(null);
   const rain = useRainAudio();
   const { timer } = focus;
@@ -46,7 +45,7 @@ export default function StudyTime() {
   useEffect(() => {
     const sync = () => setFullScreen(document.fullscreenElement === room.current);
     const escape = event => {
-      if (event.key === "Escape" && document.fullscreenElement === room.current) {
+      if (event.key === "Escape" && document.fullscreenElement === room.current && !room.current.querySelector("dialog[open]")) {
         document.exitFullscreen().catch(() => setFullScreenError("Use the exit full screen icon to return."));
       }
     };
@@ -77,7 +76,6 @@ export default function StudyTime() {
   const title = selectedTopic || (String(material?.document_id) === selectedDocument ? material.filename : selectedDocument ? "Your document" : focus.title);
   return <div ref={room} className="study-room room-motion-on">
     <header className="room-header"><h1>Study time</h1><div className="room-tools">
-      <SpotifyMusic fullScreen={fullScreen} onSelect={setMusic} onDisconnect={() => setMusic(null)} />
       <button className="room-tool room-audio" onClick={rain.toggle} disabled={rain.busy} aria-pressed={rain.playing}>{rain.playing ? "Stop rain sound" : "Play rain sound"}</button>
       {document.fullscreenEnabled && <button className="room-tool room-icon" onClick={toggleFullScreen} aria-label={fullScreen ? "Exit full screen" : "Full screen"} title={fullScreen ? "Exit full screen (Esc)" : "Full screen"}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -102,6 +100,7 @@ export default function StudyTime() {
         </div>
       </div>
     </div>
+    <SpotifyMusic />
     <div className="room-workspace"><section className="room-paper">
       <p className="room-eyebrow">ON YOUR DESK</p><h2>{title || "Your own study"}</h2>
       <p>Read, take notes, or follow your own learning resources. Your companion is here to help you make space for it.</p>
@@ -109,11 +108,6 @@ export default function StudyTime() {
       {selectedDocument && String(material?.document_id) === selectedDocument && <details className="study-source"><summary>Read your material</summary><div>{material.extracted_text}</div></details>}
       <div className="practice-navigation"><Link to="/upload">Change material</Link><Link to="/activities">Take a quiet break</Link></div>
     </section>
-    {music && <section className="room-paper room-selected-music" aria-label="Selected Spotify music">
-      <h2>{music.name}</h2>
-      <iframe key={`${music.type}-${music.id}`} title="Your selected Spotify music" src={`https://open.spotify.com/embed/${music.type}/${music.id}`} width="100%" height="352" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowFullScreen />
-      <div className="practice-navigation"><button onClick={() => setMusic(null)}>Stop music</button><a href={`https://open.spotify.com/${music.type}/${music.id}`} target="_blank" rel="noopener noreferrer">Open in Spotify</a></div>
-    </section>}
     </div>
     <footer className="room-footer">Less rush. More room to learn.</footer>
   </div>;

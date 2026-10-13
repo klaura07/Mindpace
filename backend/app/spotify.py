@@ -49,16 +49,20 @@ def _prune():
                 store.pop(key, None)
 
 
-def _request(url, *, data=None, token=None):
+def _request(url, *, data=None, token=None, method=None, payload=None):
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     if data is not None:
         data = urllib.parse.urlencode(data).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
+    if payload is not None:
+        data = json.dumps(payload).encode()
+        headers["Content-Type"] = "application/json"
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers), timeout=20) as response:
-            result = json.load(response)
+        with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=20) as response:
+            raw = response.read()
+            result = json.loads(raw) if raw else {}
         if not isinstance(result, dict):
             raise ValueError("Invalid response")
         return result
@@ -66,7 +70,9 @@ def _request(url, *, data=None, token=None):
         if exc.code in {400, 401}:
             raise HTTPException(409, "Spotify authorization expired or was rejected. Please reconnect.") from None
         if exc.code == 403:
-            raise HTTPException(403, "Spotify denied access. The app owner may need to add your account to the Spotify app's user list.") from None
+            raise HTTPException(403, "Spotify denied access. Playback controls require Premium. Reconnect to allow playback access; the app owner may also need to add your account to the allowed users.") from None
+        if exc.code == 404:
+            raise HTTPException(404, "Open Spotify on your phone, desktop, or web player and play a song there, then try again here.") from None
         if exc.code == 429:
             raise HTTPException(429, "Spotify is receiving too many requests. Please try again later.") from None
         raise HTTPException(502, "Spotify is temporarily unavailable. Please try again.") from None
@@ -110,7 +116,7 @@ def connect(request: Request, user: dict = Depends(current_user)):
                 _pending.pop(old_state)
         _pending[state] = {"session": key, "verifier": verifier, "deadline": time.time() + 600, "redirect": redirect, "client_id": client_id}
     query = urllib.parse.urlencode({"client_id": client_id, "response_type": "code", "redirect_uri": redirect,
-        "scope": "playlist-read-private playlist-read-collaborative user-library-read", "state": state,
+        "scope": "playlist-read-private playlist-read-collaborative user-library-read user-read-playback-state user-modify-playback-state", "state": state,
         "code_challenge_method": "S256", "code_challenge": challenge, "show_dialog": "true"})
     return {"authorize_url": "https://accounts.spotify.com/authorize?" + query, "state": state, "redirect_uri": redirect}
 
@@ -145,9 +151,7 @@ def disconnect(request: Request, user: dict = Depends(current_user)):
                 _pending.pop(state)
 
 
-@router.get("/library")
-def library(request: Request, kind: Literal["playlists", "tracks"] = "playlists",
-            offset: int = Query(default=0, ge=0, le=100000), user: dict = Depends(current_user)):
+def _access_token(request):
     key = _session(request)
     with _lock:
         _prune()
@@ -164,14 +168,24 @@ def library(request: Request, kind: Literal["playlists", "tracks"] = "playlists"
                 if exc.status_code == 409:
                     _connections.pop(key, None)
                 raise
-        token = _connections[key]["access_token"]
+        return _connections[key]["access_token"]
+
+
+def _api(request, path, **kwargs):
+    token = _access_token(request)
     try:
-        result = _request(f"https://api.spotify.com/v1/me/{kind}?limit=20&offset={offset}", token=token)
+        return _request(f"https://api.spotify.com/v1/{path}", token=token, **kwargs)
     except HTTPException as exc:
         if exc.status_code == 409:
             with _lock:
-                _connections.pop(key, None)
+                _connections.pop(_session(request), None)
         raise
+
+
+@router.get("/library")
+def library(request: Request, kind: Literal["playlists", "tracks"] = "playlists",
+            offset: int = Query(default=0, ge=0, le=100000), user: dict = Depends(current_user)):
+    result = _api(request, f"me/{kind}?limit=20&offset={offset}")
     items = []
     for item in result.get("items", []):
         value = item.get("track") if kind == "tracks" and isinstance(item, dict) else item
@@ -181,3 +195,53 @@ def library(request: Request, kind: Literal["playlists", "tracks"] = "playlists"
                       "type": "track" if kind == "tracks" else "playlist",
                       "subtitle": ", ".join(a.get("name", "") for a in value.get("artists", [])) if kind == "tracks" else (value.get("owner") or {}).get("display_name", "")})
     return {"items": items, "next_offset": offset + 20 if result.get("next") else None}
+
+
+@router.get("/search")
+def search(request: Request, q: str = Query(min_length=1, max_length=200),
+           kind: Literal["track", "playlist"] = "track",
+           offset: int = Query(default=0, ge=0, le=990), user: dict = Depends(current_user)):
+    if not q.strip():
+        raise HTTPException(422, "Enter a song, artist, or playlist name.")
+    query = urllib.parse.urlencode({"q": q.strip(), "type": kind, "limit": 10, "offset": offset})
+    result = _api(request, f"search?{query}").get(f"{kind}s") or {}
+    items = []
+    for value in result.get("items", []):
+        if not isinstance(value, dict) or not re.fullmatch(r"[a-zA-Z0-9]{22}", value.get("id") or ""):
+            continue
+        items.append({"id": value["id"], "name": value.get("name") or "Untitled", "type": kind,
+                      "subtitle": ", ".join(a.get("name", "") for a in value.get("artists", [])) if kind == "track" else (value.get("owner") or {}).get("display_name", "")})
+    return {"items": items, "next_offset": offset + 10 if result.get("next") and offset < 990 else None}
+
+
+@router.get("/playback")
+def playback(request: Request, user: dict = Depends(current_user)):
+    result = _api(request, "me/player")
+    item = result.get("item") or {}
+    device = result.get("device") or {}
+    return {"active": bool(device), "playing": bool(result.get("is_playing")),
+            "shuffle": bool(result.get("shuffle_state")), "device": device.get("name"),
+            "restricted": bool(device.get("is_restricted")),
+            "disallows": (result.get("actions") or {}).get("disallows", {}),
+            "track": {"name": item.get("name"), "subtitle": ", ".join(a.get("name", "") for a in item.get("artists", []))} if item else None}
+
+
+class PlaybackCommand(BaseModel):
+    action: Literal["play", "pause", "previous", "next", "shuffle"]
+    uri: str | None = Field(default=None, pattern=r"^spotify:(track|playlist):[a-zA-Z0-9]{22}$")
+    shuffle: bool | None = None
+
+
+@router.post("/playback", status_code=204)
+def control(body: PlaybackCommand, request: Request, user: dict = Depends(current_user)):
+    if body.action == "shuffle":
+        if body.shuffle is None:
+            raise HTTPException(422, "Choose whether shuffle should be on or off.")
+        _api(request, f"me/player/shuffle?state={str(body.shuffle).lower()}", method="PUT")
+    elif body.action == "play":
+        payload = None
+        if body.uri:
+            payload = {"context_uri": body.uri} if body.uri.startswith("spotify:playlist:") else {"uris": [body.uri]}
+        _api(request, "me/player/play", method="PUT", payload=payload)
+    else:
+        _api(request, f"me/player/{body.action}", method="POST" if body.action in {"previous", "next"} else "PUT")

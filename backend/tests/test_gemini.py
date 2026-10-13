@@ -133,6 +133,32 @@ def test_retry_limit(monkeypatch):
     assert send.call_count == 3
 
 
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_timeouts_recover_using_fallback(monkeypatch, wrapped):
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    monkeypatch.setattr(gemini, "GEMINI_FALLBACK_MODEL", "fallback-model")
+    def timeout():
+        error = TimeoutError("read timed out")
+        return urllib.error.URLError(error) if wrapped else error
+    body = {"candidates": [{"content": {"parts": [{"text": "recovered"}]}}]}
+    with patch("urllib.request.urlopen", side_effect=[timeout(), timeout(), _mock_response(body)]) as send:
+        assert gemini._call_gemini("hi") == "recovered"
+    assert send.call_count == 3
+    assert "fallback-model:generateContent" in send.call_args.args[0].full_url
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_timeouts_stop_after_three_attempts(monkeypatch, wrapped):
+    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+    error = TimeoutError("read timed out")
+    if wrapped:
+        error = urllib.error.URLError(error)
+    with patch("urllib.request.urlopen", side_effect=error) as send:
+        with pytest.raises(RuntimeError, match="timed out"):
+            gemini._call_gemini("hi")
+    assert send.call_count == 3
+
+
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
 def test_permanent_errors_are_not_retried(monkeypatch, status):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
