@@ -16,7 +16,8 @@ function Test-LocalService([string]$Url, [string]$Expected) {
     try {
         $request = [System.Net.HttpWebRequest]::Create($Url)
         $request.Proxy = $null
-        $request.Timeout = 1500
+        $request.Timeout = 5000
+        $request.ReadWriteTimeout = 5000
         $response = $request.GetResponse()
         try {
             $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
@@ -42,14 +43,14 @@ if (!(Test-LocalService 'http://127.0.0.1:8000/health' '"status":"ok"')) {
     Write-Host "Backend started (PID $($backendProcess.Id))."
 }
 
-if (!(Test-LocalService 'http://localhost:5173/@vite/client' 'vite')) {
+if (!(Test-LocalService 'http://127.0.0.1:5173/@vite/client' 'vite')) {
     $frontendLog = Join-Path $projectRoot 'frontend\server-error.log'
     $frontendProcess = Start-Process -FilePath $nodePath -ArgumentList "`"$vitePath`"" -WorkingDirectory (Join-Path $projectRoot 'frontend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $projectRoot 'frontend\server.log') -RedirectStandardError $frontendLog -PassThru
-    Wait-LocalService 'http://localhost:5173/@vite/client' 'vite' $frontendProcess $frontendLog
+    Wait-LocalService 'http://127.0.0.1:5173/@vite/client' 'vite' $frontendProcess $frontendLog
     Write-Host "Frontend started (PID $($frontendProcess.Id))."
 }
-if (!(Test-LocalService 'http://localhost:5173/api/health' '"status":"ok"')) {
+if (!(Test-LocalService 'http://127.0.0.1:5173/api/health' '"status":"ok"')) {
     throw 'Frontend cannot reach the backend. Check frontend\server-error.log and backend\server-error.log.'
 }
-Write-Host 'MindPace is ready: http://localhost:5173'
+Write-Host 'MindPace is ready: http://127.0.0.1:5173'
 Write-Host 'Services run in the background. Logs: backend\server*.log and frontend\server*.log.'

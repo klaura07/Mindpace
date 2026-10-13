@@ -99,7 +99,7 @@ export default function Questions() {
         <button onClick={() => update({ ...EMPTY })}>Explore these questions again</button>
         <Link to="/dashboard">View learning progress</Link>
       </div> : !practice.question ? <div>
-        <p role="status">{loading ? "Preparing conceptual questions and explanations..." : "Your questions are ready to retry."}</p>
+        <p role="status">{loading ? "Preparing conceptual questions and explanations..." : practice.sessionId ? "Your practice is saved. Retry to load the next question." : "Questions could not be prepared. Your material is saved; retry to generate questions."}</p>
         {!loading && <button onClick={begin}>Retry questions</button>}
       </div> : <>
         <p>Question {practice.answered + (practice.feedback ? 0 : 1)} · {practice.remaining} in this set</p>

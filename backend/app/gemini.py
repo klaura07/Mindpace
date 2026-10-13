@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.6-flash").strip()
 GEMINI_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 )
@@ -74,7 +74,7 @@ def _request_gemini(payload: dict) -> dict:
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is not set")
 
-    # Retry only explicit temporary upstream failures. Authentication, quota,
+    # Retry temporary upstream failures and timeouts. Authentication, quota,
     # and invalid requests need action rather than repeated generation calls.
     models = [GEMINI_MODEL, GEMINI_MODEL, GEMINI_FALLBACK_MODEL or GEMINI_MODEL]
     for attempt, model in enumerate(models):
@@ -109,8 +109,16 @@ def _request_gemini(payload: dict) -> dict:
                 ) from e
             raise RuntimeError(f"Gemini API error: {status}") from e
         except urllib.error.URLError as e:
+            if isinstance(e.reason, TimeoutError):
+                if attempt < len(models) - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError("Gemini API request timed out. Please try again.") from e
             raise RuntimeError("Gemini API unreachable. Check the server's internet connection.") from e
         except TimeoutError as e:
+            if attempt < len(models) - 1:
+                time.sleep(2 ** attempt)
+                continue
             raise RuntimeError("Gemini API request timed out. Please try again.") from e
         except json.JSONDecodeError as e:
             raise RuntimeError("Gemini returned an invalid response. Please try again.") from e

@@ -194,6 +194,29 @@
 .room-music-list button { width: 100%; text-align: left; flex-direction: column; align-items: flex-start; gap: 4px; overflow-wrap: anywhere; }
 .room-music-list small { color: #727766; }
 .study-room .room-music-note { font-size: 12px; color: #727766; }
-.study-room section.room-selected-music { margin-top: 26px; }
-.room-selected-music iframe { display: block; border: 0; border-radius: 12px; max-width: 100%; margin-top: 16px; }
-.room-selected-music a { color: #536b47; align-self: center; font-size: 13px; }
+.room-music-dock { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; width: min(560px, calc(100% - 32px)); margin: 12px auto; padding: 10px 14px; border: 1px solid #bdcbaa; border-radius: 18px; background: #fffdf6; box-shadow: 3px 4px 0 #b9c5a740; flex-shrink: 0; }
+.study-room .room-music-browse { display: flex; align-items: center; justify-content: flex-start; flex: 1; min-width: 0; gap: 10px; padding: 4px; border: 0; background: transparent; text-align: left; box-shadow: none; }
+.room-music-browse svg { width: 30px; height: 30px; flex-shrink: 0; color: #536b47; }
+.room-music-browse span { min-width: 0; }
+.room-music-browse strong, .room-music-browse small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+.room-music-browse strong { font-size: 14px; }
+.room-music-browse small { font-size: 11px; font-weight: 400; margin-top: 3px; color: #627354; }
+.room-music-controls { display: flex; gap: 5px; }
+.study-room .room-music-controls [aria-pressed=true] { background: #dce5ce; border-color: #536b47; color: #304e24; }
+.study-room .room-playback-message { flex-basis: 100%; margin: 0; font-size: 12px; line-height: 1.5; }
+.study-room .room-playback-message button { padding: 2px 6px; font-size: 12px; min-height: 28px; }
+.room-music-dock a, .room-music-dialog a { color: #536b47; text-decoration: underline; }
+.room-music-search { display: grid; gap: 10px; margin-top: 18px; }
+.room-music-search label { font-size: 13px; }
+.room-music-search input, .room-music-search select { width: 100%; min-width: 0; border: 1px solid #bdcbaa; border-radius: 8px; background: #fff; padding: 10px; color: #424d3e; font: inherit; }
+.room-music-search > div { display: flex; gap: 10px; }
+.room-music-search button { flex-shrink: 0; }
+.study-room:fullscreen .room-music-dock { margin-top: 6px; margin-bottom: max(10px, env(safe-area-inset-bottom)); }
+@media (max-width: 600px) {
+  .room-music-dock { gap: 8px; padding: 8px 10px; }
+  .room-music-browse strong, .room-music-browse small { max-width: 100%; }
+  .room-music-browse svg { width: 24px; height: 24px; }
+  .room-music-controls { gap: 2px; }
+  .study-room .room-music-controls .room-icon { width: 36px; min-height: 40px; padding: 5px; }
+  .room-music-dialog { padding: 18px; }
+}
